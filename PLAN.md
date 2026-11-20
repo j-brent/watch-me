@@ -79,7 +79,7 @@ README.md                     what it is, build/run, controls, fidelity notes
 docs/
   STATECHART-SPEC.md          behaviour spec (T-xx rows) — source of truth
   DESIGN-NOTES.md             SCXML mappings, deviations, Step 0 corrections
-  harel1987.pdf               (user-supplied; .gitignore if licensing unclear)
+  harel1987.pdf               the paper (private repo only)
 statechart/
   watch.scxml                 the machine; every transition has <!-- T-xx -->
   layout.json                 view hints (region order, collapsed-by-default)
