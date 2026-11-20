@@ -11,7 +11,8 @@ Usage: tools/verify.py [--bin APP | --cmd "COMMAND"] [--check | --no-doc] [build
   --bin APP      the watch-me executable (default: <build-dir>/watch-me); ctest passes
                  the real target file, which differs on Windows and macOS.
   --cmd COMMAND  the start command of another host, split like a shell would
-                 (e.g. --cmd "python3 python/main.py"); implies --no-doc.
+                 (e.g. --cmd "python3 python/main.py"); implies --no-doc and
+                 cannot be combined with --check.
   --check        do not write docs/VERIFICATION.md; fail if it differs from what this
                  run generates (CI: the committed document must be current).
   --no-doc       do not write or check docs/VERIFICATION.md; only the walk counts.
@@ -19,8 +20,9 @@ Exit status 0 only if every row passes, every spec row is walked, and (--check) 
 document is current. Runs as the ctest `verify`, so CI runs it on every platform.
 
 Each run starts with the battery inserted at 1987-06-01 10:08:30.
-Script steps: 'a' click, '+a'/'-a' hold/release, 'wait:ms', 'set:var:value'
-(datamodel), 'advance:ms' (the statechart's timeout clock), 'clock:ms' (the
+Script steps: 'a' click, '+a'/'-a' hold/release, 'wait:ms',
+'set:harelAnomalies:value' (the Fig. 32 flag, sent as host.anomalies; no other
+datamodel value can be set, DESIGN-NOTES D-24), 'advance:ms' (the statechart's timeout clock), 'clock:ms' (the
 watch's time T), 'alarm:n:HH:MM', 'jump:n:secs', 'settime:H:M:S', or an event name.
 """
 import argparse
@@ -30,6 +32,7 @@ import os
 import pathlib
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -184,19 +187,36 @@ def run(row):
     return rid, steps, expect, active, forbid, ok, observed
 
 
+def split_command(cmd):
+    """Split --cmd like the platform's shell would. POSIX rules eat the backslashes
+    of Windows paths, so on Windows split with posix=False and drop the quotes
+    around each token itself (posix=False keeps them, and subprocess would pass
+    them on as part of the program name)."""
+    if os.name != "nt":
+        return shlex.split(cmd)
+    return [t[1:-1] if len(t) >= 2 and t[0] == t[-1] and t[0] in "\"'" else t
+            for t in shlex.split(cmd, posix=False)]
+
+
 def main():
     global CMD
     ap = argparse.ArgumentParser()
     ap.add_argument("build_dir", nargs="?", default="build")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--bin", help="the watch-me executable")
-    src.add_argument("--cmd", help="start command of another host (implies --no-doc)")
+    src.add_argument("--cmd", help="start command of another host (implies --no-doc; not with --check)")
     doc_mode = ap.add_mutually_exclusive_group()
     doc_mode.add_argument("--check", action="store_true", help="fail if docs/VERIFICATION.md is not current")
     doc_mode.add_argument("--no-doc", action="store_true", help="neither write nor check docs/VERIFICATION.md")
     args = ap.parse_args()
+    if args.cmd and args.check:
+        ap.error("--check needs the C++ host (--bin); --cmd never writes or checks docs/VERIFICATION.md")
     if args.cmd:
-        CMD = shlex.split(args.cmd, posix=os.name != "nt")
+        CMD = split_command(args.cmd)
+        if not CMD:
+            ap.error("--cmd is empty")
+        if shutil.which(CMD[0]) is None and not pathlib.Path(CMD[0]).is_file():
+            sys.exit(f"host command not found: {CMD[0]}")
         args.no_doc = True
     else:
         binary = pathlib.Path(args.bin) if args.bin else ROOT / args.build_dir / "watch-me"

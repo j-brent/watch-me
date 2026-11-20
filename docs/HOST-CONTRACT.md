@@ -8,8 +8,11 @@ reference, and `python/`, `rust/`, `qmljs/` and `qmlts/` follow it
 document; where the two disagree, fix one of them.
 
 A host passes when `tools/verify.py --cmd "<its start command>"` reports every
-row ✓ (§6). That walk drives the app through its command line and compares the
-exported event log line by line, so §3–§5 are exact, not approximate.
+row ✓ (§6). That walk drives the app through its command line and checks the
+exported event log: each expected entry (§4) must appear within some log line,
+and the `# active:` line must contain the expected states. It does not compare
+whole lines, so it cannot catch extra text in a line; write §4's formats exactly
+anyway, they are the contract.
 
 ## 1. What is shared and what each host owns
 
@@ -79,7 +82,7 @@ Parses `watch.scxml` itself (an XML reader, not Qt SCXML) into a plain tree.
   `specId` comes from the `<log label="T-xx">` inside the transition, else from
   a `<!-- T-xx -->` comment right after it.
 - Not transitions: the default transition inside a `<history>` (D-22) and any
-  transition on a `host.*` event (D-24).
+  transition whose events are all `host.*` events (D-24).
 - Also used by the tracer: `ancestors(id)` (nearest first) and the transition list.
 
 ### `tracer` — TransitionTracer
@@ -151,7 +154,8 @@ Reads `docs/STATECHART-SPEC.md`: every table row `| T-xx | … [P|F|A] …` give
 
 ## 4. The event log
 
-One string per entry. The walk (§6) matches these strings exactly.
+One string per entry, in exactly these formats. The walk (§6) looks for the
+expected entries as substrings of these lines.
 
 ### 4.1 Inputs
 `▶ <event>` for every event submitted through `ButtonRouter` (not for
@@ -168,7 +172,10 @@ e.g. `T-10 a.down: time → alarm1`, `T-27 d.down: update → (no state change)`
 
 Source and targets come from the parsed tree, because the log signal only names
 the row (and Qt may deliver it after the macrostep, D-18):
-1. Keep the last 4 stable configurations (newest first).
+1. Keep the last 4 *distinct* stable configurations (newest first): when a
+   macrostep ends in the same configuration as the newest one kept (`host.data`,
+   `timer.*`, `model.*` and the like change no state), do not add it again
+   (DESIGN-NOTES D-26).
 2. Candidates: transitions with this `specId` whose source was active in one of
    them and whose every target is active now (for a history target: its parent).
    If there are none, drop the "active now" condition.
