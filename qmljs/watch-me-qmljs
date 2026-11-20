@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Start the QML/JavaScript host of watch-me with Qt's `qml` runtime tool.
+# Usage: qmljs/watch-me-qmljs [--no-gui] [--time ISO] [--script STEPS] … (see --help)
+#
+# Finds `qml` in this order: $QT_QML_BIN (the tool itself), $QTDIR/bin/qml,
+# $QT_ROOT_DIR/bin/qml (set by jurplel/install-qt-action), then PATH.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+qml=""
+if [[ -n "${QT_QML_BIN:-}" ]]; then
+    qml="$QT_QML_BIN"
+elif [[ -n "${QTDIR:-}" && -x "$QTDIR/bin/qml" ]]; then
+    qml="$QTDIR/bin/qml"
+elif [[ -n "${QT_ROOT_DIR:-}" && -x "$QT_ROOT_DIR/bin/qml" ]]; then
+    qml="$QT_ROOT_DIR/bin/qml"
+elif command -v qml >/dev/null 2>&1; then
+    qml="$(command -v qml)"
+else
+    echo "watch-me-qmljs: Qt's 'qml' tool not found; set QT_QML_BIN or QTDIR (Qt 6.8 with Qt SCXML)." >&2
+    exit 127
+fi
+
+# --no-gui runs in a core application: no window, no platform plugin.
+apptype=gui
+for arg in "$@"; do
+    [[ "$arg" == "--no-gui" ]] && apptype=core
+done
+
+# QML's XMLHttpRequest reads and writes file: URLs only when allowed
+# (https://doc.qt.io/qt-6/qml-qtqml-xmlhttprequest.html): the host reads
+# watch.scxml, layout.json and STATECHART-SPEC.md, and writes exported logs.
+export QML_XHR_ALLOW_FILE_READ=1
+export QML_XHR_ALLOW_FILE_WRITE=1
+# <log> elements are spec-row markers for the tracer, not console output.
+export QT_LOGGING_RULES="scxml.statemachine.debug=false${QT_LOGGING_RULES:+;$QT_LOGGING_RULES}"
+
+# --cwd: QML cannot ask for the working directory; relative export/grab paths need it.
+exec "$qml" --apptype "$apptype" "$here/Host.qml" -- --cwd "$PWD" "$@"
