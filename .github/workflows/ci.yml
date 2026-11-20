@@ -101,7 +101,12 @@ jobs:
             Windows) app=dist/bin/watch-me.exe ;;
             macOS)   app=dist/watch-me.app/Contents/MacOS/watch-me ;;
           esac
-          "$app" --script "battery.inserted;a;a;a;a;b" --grab smoke.png
+          # Use only what was deployed: install-qt-action points these variables at
+          # the Qt installation, which would load a second copy of Qt's libraries
+          # (crash on macOS) and hide anything missing from the package.
+          env -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QML_IMPORT_PATH -u LD_LIBRARY_PATH \
+              -u QT_ROOT_DIR -u Qt6_DIR \
+              "$app" --script "battery.inserted;a;a;a;a;b" --grab smoke.png
           test -s smoke.png
 
       - name: Package
