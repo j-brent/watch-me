@@ -81,7 +81,7 @@ void TstTree::specTags()
     QCOMPARE(s.tagFor("T-01"), QStringLiteral("P"));
     QCOMPARE(s.weakest({"T-01", "T-03"}), QStringLiteral("F"));
     QCOMPARE(s.weakest({"T-01", "T-02", "T-03"}), QStringLiteral("A"));
-    QCOMPARE(s.weakest({"T-99"}), QString());
+    QCOMPARE(s.weakest({"no-such-row"}), QString());
     // the real spec: every row tagged, all confirmed after Step 0
     SpecTags real;
     QVERIFY(real.load(QStringLiteral(":/docs/STATECHART-SPEC.md")));
