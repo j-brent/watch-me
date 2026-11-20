@@ -22,18 +22,20 @@ public:
     Q_INVOKABLE void release(const QString &button);
     Q_INVOKABLE void releaseAll();
     Q_INVOKABLE void submit(const QString &event);   // any other external event
-    // Sim panel: write a datamodel value (e.g. the harelAnomalies flag). Write
-    // through here (not the datamodel directly) so views showing it stay in sync.
+    // Sim panel: datamodel values, through the host boundary (DESIGN-NOTES D-24).
+    // setDataValue sends host.<event> (only "harelAnomalies" is settable); dataValue
+    // returns the last value the statechart reported in host.data.
     Q_INVOKABLE void setDataValue(const QString &name, const QVariant &value);
-    Q_INVOKABLE QVariant dataValue(const QString &name) const;
+    Q_INVOKABLE QVariant dataValue(const QString &name) const { return m_data.value(name); }
 
 signals:
     void heldChanged();
-    // `name` was written with setDataValue; empty: the datamodel was (re)initialized.
+    // host.data changed `name`; empty: the first host.data (every value is new).
     void dataValueChanged(const QString &name);
 
 private:
     QScxmlStateMachine *m_machine;
     TransitionTracer *m_tracer = nullptr;
     QSet<QString> m_held;
+    QVariantMap m_data;     // last host.data
 };

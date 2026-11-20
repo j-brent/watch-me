@@ -63,6 +63,7 @@ private:
     QVariantMap m_activeMap, m_flashMap;
     QStringList m_entries;
     QSet<QString> m_fired;
+    QVariantMap m_data;      // last host.data: the hv_* flags (DESIGN-NOTES D-24)
     QString m_lastSpecId;
     QElapsedTimer m_clock;
 };

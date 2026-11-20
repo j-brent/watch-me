@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
-"""P8 verification walk: drives the *running app* (without its window, --no-gui) through its normal
-input path (ButtonRouter -> WatchMachine -> TransitionTracer) once per spec row,
-exports the app's own event log, and checks it. Writes docs/VERIFICATION.md.
+"""P8 verification walk and cross-host conformance suite: drives the *running app*
+(without its window, --no-gui) through its normal input path (ButtonRouter ->
+WatchMachine -> TransitionTracer) once per spec row, exports the app's own event
+log, and checks it. Writes docs/VERIFICATION.md (from the C++ host only).
 
-Usage: tools/verify.py [--bin APP] [--check] [build-dir]
-  --bin APP   the watch-me executable (default: <build-dir>/watch-me); ctest passes
-              the real target file, which differs on Windows and macOS.
-  --check     do not write docs/VERIFICATION.md; fail if it differs from what this
-              run generates (CI: the committed document must be current).
+Any host that implements docs/HOST-CONTRACT.md (cpp/, python/, rust/, qmljs/,
+qmlts/) is checked the same way: give its command line with --cmd.
+
+Usage: tools/verify.py [--bin APP | --cmd "COMMAND"] [--check | --no-doc] [build-dir]
+  --bin APP      the watch-me executable (default: <build-dir>/watch-me); ctest passes
+                 the real target file, which differs on Windows and macOS.
+  --cmd COMMAND  the start command of another host, split like a shell would
+                 (e.g. --cmd "python3 python/main.py"); implies --no-doc.
+  --check        do not write docs/VERIFICATION.md; fail if it differs from what this
+                 run generates (CI: the committed document must be current).
+  --no-doc       do not write or check docs/VERIFICATION.md; only the walk counts.
 Exit status 0 only if every row passes, every spec row is walked, and (--check) the
 document is current. Runs as the ctest `verify`, so CI runs it on every platform.
 
@@ -22,12 +29,13 @@ import difflib
 import os
 import pathlib
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-BIN = ROOT / "build" / "watch-me"          # replaced from the command line in main()
+CMD = [str(ROOT / "build" / "watch-me")]   # the host's start command, set in main()
 
 UPD = "+c;advance:2000;-c"                          # hold c for 2 s: into update.sec
 SW = "a;a;a;a"                                       # time -> stopwatch
@@ -146,7 +154,7 @@ def run(row):
         env = dict(os.environ)
         app_status = ""
         try:
-            proc = subprocess.run([str(BIN), "--no-gui", "--time", "1987-06-01T10:08:30", "--manual-time", "--exit",
+            proc = subprocess.run(CMD + ["--no-gui", "--time", "1987-06-01T10:08:30", "--manual-time", "--exit",
                                    "--grab-delay", "50", "--script", script], env=env,
                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
             app_output = proc.stdout.decode("utf-8", errors="replace")
@@ -177,15 +185,24 @@ def run(row):
 
 
 def main():
-    global BIN
+    global CMD
     ap = argparse.ArgumentParser()
     ap.add_argument("build_dir", nargs="?", default="build")
-    ap.add_argument("--bin", help="the watch-me executable")
-    ap.add_argument("--check", action="store_true", help="fail if docs/VERIFICATION.md is not current")
+    src = ap.add_mutually_exclusive_group()
+    src.add_argument("--bin", help="the watch-me executable")
+    src.add_argument("--cmd", help="start command of another host (implies --no-doc)")
+    doc_mode = ap.add_mutually_exclusive_group()
+    doc_mode.add_argument("--check", action="store_true", help="fail if docs/VERIFICATION.md is not current")
+    doc_mode.add_argument("--no-doc", action="store_true", help="neither write nor check docs/VERIFICATION.md")
     args = ap.parse_args()
-    BIN = pathlib.Path(args.bin) if args.bin else ROOT / args.build_dir / "watch-me"
-    if not BIN.exists():
-        sys.exit(f"build the app first: {BIN}")
+    if args.cmd:
+        CMD = shlex.split(args.cmd, posix=os.name != "nt")
+        args.no_doc = True
+    else:
+        binary = pathlib.Path(args.bin) if args.bin else ROOT / args.build_dir / "watch-me"
+        if not binary.exists():
+            sys.exit(f"build the app first: {binary}")
+        CMD = [str(binary)]
     with cf.ThreadPoolExecutor(max_workers=4) as ex:
         results = list(ex.map(run, ROWS))
     spec = (ROOT / "docs/STATECHART-SPEC.md").read_text(encoding="utf-8")
@@ -238,7 +255,9 @@ def main():
     doc = ROOT / "docs/VERIFICATION.md"
     text = "\n".join(md)
     stale = False
-    if args.check:
+    if args.no_doc:
+        pass
+    elif args.check:
         committed = doc.read_text(encoding="utf-8") if doc.exists() else ""
         if committed != text:
             stale = True

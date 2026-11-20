@@ -279,6 +279,44 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
     (`00:00` at midnight; it used to show ` 0:00`), and the stopwatch display wraps
     from `59'59"99` to `00'00"00` while it keeps counting (it already did; now it
     is specified and tested).
+- **D-24 Host boundary: events only.** Hosts never read or write the SCXML
+  datamodel. Qt does not expose `QScxmlDataModel::scxmlProperty` /
+  `setScxmlProperty` to QML, so a host written in QML/JavaScript alone (`qmljs/`,
+  `qmlts/`, D-25) could not push the alarm times, toggle the Fig. 32 flag or read
+  the `hv_*` flags the event log needs. All hosts therefore use events, C++
+  included, so the hosts stay comparable:
+  - in: `host.alarms{T1, T2}` (WatchModel, whenever an alarm time changes) and
+    `host.anomalies{value}` (the sim panel's "Fig. 32 quirk" box, `set:` steps);
+    targetless transitions on the root state `watch` assign them.
+  - out: `host.data` with `namelist="harelAnomalies hv_alarm1 hv_alarm2 hv_chime
+    hv_stopwatch"`, sent on entry to `watch` and wherever one of these changes
+    (the four history `onexit`s, the clh(main\*) assignments of T-02/T-03, and
+    `host.anomalies`). `ButtonRouter.dataValue` and `TransitionTracer` (to tell
+    the two branches of a clh(main\*) pair apart, D-18) use the last `host.data`.
+  - The host events are queued like every other input, so a `T.hits.T1` submitted
+    after `host.alarms` sees the new `T1`. `hv_x` only changes when `x` is exited,
+    so a cached value is the one the condition saw (as before, D-18).
+  - The `host.*` transitions are plumbing, not spec rows: they carry no T-xx or
+    `<log>`, `conformance.py` exempts them and `ScxmlTreeModel` leaves them out
+    of the chart. Behaviour is unchanged: `docs/VERIFICATION.md` is identical.
+  The only datamodel access left is in tests (inspection) and `main.cpp`'s check
+  that the ECMAScript datamodel plugin is installed.
+- **D-25 Several hosts, one statechart and one UI.** The repository holds one
+  `shared/` part (`shared/statechart/watch.scxml`, `layout.json`, all QML) and
+  one directory per host language: `cpp/` (the reference), and `python/`,
+  `rust/`, `qmljs/`, `qmlts/` as they are added. A host is everything around the
+  statechart and the QML: the clock (`WatchModel`), the timeouts
+  (`TimeoutService`), input (`ButtonRouter`), the event log (`TransitionTracer`),
+  the chart model (`ScxmlTreeModel`), `SpecTags`, `Beeper` and the command line.
+  `docs/HOST-CONTRACT.md` specifies all of it. `Main.qml` declares the host
+  objects as required properties (instead of context properties), so a host that
+  forgets one fails to load, and QML-only hosts can pass their own QML objects.
+  Every host must pass the same walk: `tools/verify.py --cmd "<host command>"`.
+  The root `CMakeLists.txt` builds the C++ host; `qt_add_qml_module` needs the QML
+  inside its source tree, so it stays at the root rather than in `cpp/`.
+  `qt_standard_project_setup(REQUIRES 6.8)` opts into Qt 6.8's policies; the QML
+  module now lives under `qrc:/qt/qml/WatchMe/`, so `main.cpp` loads it with
+  `loadFromModule("WatchMe", "Main")` instead of a resource path.
 
 ## 3. Open deviations from the paper (summary)
 

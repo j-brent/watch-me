@@ -72,8 +72,10 @@ public:
     void reset() { fired.clear(); out.clear(); }
     void setAlarms(int t1, int t2)
     {
-        m.dataModel()->setScxmlProperty(QStringLiteral("T1"), t1, QString());
-        m.dataModel()->setScxmlProperty(QStringLiteral("T2"), t2, QString());
+        // the host boundary (DESIGN-NOTES D-24), as WatchModel does it
+        m.submitEvent(QStringLiteral("host.alarms"),
+                      QVariantMap{{QStringLiteral("T1"), t1}, {QStringLiteral("T2"), t2}});
+        settle();
     }
 
     void alive() { send(QStringLiteral("battery.inserted")); }

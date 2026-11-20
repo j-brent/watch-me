@@ -2,8 +2,6 @@
 #include "ScxmlTreeModel.h"
 #include <QScxmlStateMachine>
 #include <QScxmlEvent>
-#include <QScxmlDataModel>
-#include <QJSValue>
 #include <QFile>
 #include <QCollator>
 #include <QRegularExpression>
@@ -28,6 +26,9 @@ TransitionTracer::TransitionTracer(QScxmlStateMachine *machine, ScxmlTreeModel *
             append(line);
         });
     }
+    // The hv_* flags tell the two branches of a clh(main*) pair apart (onLog).
+    machine->connectToEvent(QStringLiteral("host.data"), this,
+                            [this](const QScxmlEvent &e) { m_data = e.data().toMap(); });
     onStable();
 }
 
@@ -79,18 +80,14 @@ void TransitionTracer::onLog(const QString &label, const QString &msg)
         if (cands.size() > 1) {
             // Same row, same source: the clh(main*) pairs "[hv_x] -> x_H" / "-> x".
             // hv_x is only changed when x is exited, so it still tells which branch fired.
+            // Its value comes from host.data (DESIGN-NOTES D-24).
             static const QRegularExpression ident(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*$"));
             const ScxmlTransition *uncond = nullptr, *taken = nullptr;
             for (const auto *t : cands) {
                 if (t->cond.isEmpty()) {
                     uncond = t;
-                } else if (ident.match(t->cond).hasMatch() && m_machine->dataModel()) {
-                    // the ecmascript datamodel hands out QJSValue-wrapped variants
-                    QVariant v = m_machine->dataModel()->scxmlProperty(t->cond);
-                    if (v.metaType() == QMetaType::fromType<QJSValue>())
-                        v = v.value<QJSValue>().toVariant();
-                    if (v.toBool())
-                        taken = t;
+                } else if (ident.match(t->cond).hasMatch() && m_data.value(t->cond).toBool()) {
+                    taken = t;
                 }
             }
             best = taken ? taken : (uncond ? uncond : best);

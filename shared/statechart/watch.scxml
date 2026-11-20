@@ -15,7 +15,13 @@
   on exit; C++ (TimeoutService) counts the time and submits timeout.X{gen}. The
   statechart decides every timer; C++ only keeps the clock (DESIGN-NOTES D-20).
 
-  Outgoing events (model.*, sw.*, beep.short, timer.*) are plain <send>s to the machine's own
+  Host boundary (DESIGN-NOTES D-24, docs/HOST-CONTRACT.md): hosts never read or
+  write the datamodel. They set values with host.alarms{T1,T2} and
+  host.anomalies{value}, and learn values from host.data{harelAnomalies, hv_*},
+  sent at start-up and whenever one of those changes. Qt does not expose the
+  datamodel to QML, so this keeps every host, QML-only ones included, on events.
+
+  Outgoing events (model.*, sw.*, beep.short, timer.*, host.data) are plain <send>s to the machine's own
   external queue, observed in C++ with QScxmlStateMachine::connectToEvent
   (https://doc.qt.io/qt-6/qscxmlstatemachine.html#connectToEvent). Qt 6.4 rejects
   type="qt:signal" (DESIGN-NOTES D-11).
@@ -35,7 +41,7 @@
     <data id="tg_chime_beep" expr="0"/>
     <!-- Fig. 32 (a silences the beep-test beep). Not part of Fig. 31. -->
     <data id="harelAnomalies" expr="true"/>
-    <!-- Alarm times in minutes after midnight; written by WatchModel. -->
+    <!-- Alarm times in minutes after midnight; set by the host with host.alarms. -->
     <data id="T1" expr="720"/>
     <data id="T2" expr="720"/>
     <!-- "History valid" flags: emulation of clh(main*) (spec §3.1, DESIGN-NOTES D-2). -->
@@ -53,6 +59,19 @@
   </script>
 
   <state id="watch" initial="dead">
+    <onentry>
+      <send event="host.data" namelist="harelAnomalies hv_alarm1 hv_alarm2 hv_chime hv_stopwatch"/> <!-- host boundary (D-24) -->
+    </onentry>
+
+    <!-- Host boundary (D-24): not spec rows, no <log>. Targetless, so no state changes. -->
+    <transition event="host.alarms">
+      <assign location="T1" expr="_event.data.T1"/>
+      <assign location="T2" expr="_event.data.T2"/>
+    </transition>
+    <transition event="host.anomalies">
+      <assign location="harelAnomalies" expr="!!_event.data.value"/>
+      <send event="host.data" namelist="harelAnomalies hv_alarm1 hv_alarm2 hv_chime hv_stopwatch"/>
+    </transition>
 
     <!-- ===================================================================== dead -->
     <state id="dead">
@@ -73,6 +92,7 @@
             <assign location="hv_alarm2" expr="false"/>
             <assign location="hv_chime" expr="false"/>
             <assign location="hv_stopwatch" expr="false"/>
+            <send event="host.data" namelist="harelAnomalies hv_alarm1 hv_alarm2 hv_chime hv_stopwatch"/>
       </transition>
 
       <!-- 2-minute returns: any button restarts the timer of the active display
@@ -235,7 +255,7 @@
 
             <state id="alarm1" initial="alarm1_off">
               <history id="alarm1_H" type="shallow"><transition target="alarm1_off"/></history>
-              <onexit><assign location="hv_alarm1" expr="true"/></onexit>
+              <onexit><assign location="hv_alarm1" expr="true"/><send event="host.data" namelist="harelAnomalies hv_alarm1 hv_alarm2 hv_chime hv_stopwatch"/></onexit>
               <transition event="a.down" cond="hv_alarm2" target="alarm2_H"><log label="T-11" expr="_event.name"/></transition> <!-- T-11 -->
               <transition event="a.down" target="alarm2"><log label="T-11" expr="_event.name"/></transition> <!-- T-11 (history cleared) -->
               <transition event="c.down" target="update1_hr"><log label="T-30" expr="_event.name"/></transition> <!-- T-30 -->
@@ -268,7 +288,7 @@
 
             <state id="alarm2" initial="alarm2_off">
               <history id="alarm2_H" type="shallow"><transition target="alarm2_off"/></history>
-              <onexit><assign location="hv_alarm2" expr="true"/></onexit>
+              <onexit><assign location="hv_alarm2" expr="true"/><send event="host.data" namelist="harelAnomalies hv_alarm1 hv_alarm2 hv_chime hv_stopwatch"/></onexit>
               <transition event="a.down" cond="hv_chime" target="chime_H"><log label="T-12" expr="_event.name"/></transition> <!-- T-12 -->
               <transition event="a.down" target="chime"><log label="T-12" expr="_event.name"/></transition> <!-- T-12 (history cleared) -->
               <transition event="c.down" target="update2_hr"><log label="T-35" expr="_event.name"/></transition> <!-- T-35 -->
@@ -301,7 +321,7 @@
 
             <state id="chime" initial="chime_off">
               <history id="chime_H" type="shallow"><transition target="chime_off"/></history>
-              <onexit><assign location="hv_chime" expr="true"/></onexit>
+              <onexit><assign location="hv_chime" expr="true"/><send event="host.data" namelist="harelAnomalies hv_alarm1 hv_alarm2 hv_chime hv_stopwatch"/></onexit>
               <transition event="a.down" cond="hv_stopwatch" target="sw_H"><log label="T-13" expr="_event.name"/></transition> <!-- T-13 -->
               <transition event="a.down" target="stopwatch"><log label="T-13" expr="_event.name"/></transition> <!-- T-13 (history cleared) -->
               <state id="chime_off">
@@ -316,7 +336,7 @@
           <!-- ....................................................... stopwatch -->
           <state id="stopwatch" initial="sw_zero">
             <history id="sw_H" type="deep"><transition target="sw_zero"/></history>
-            <onexit><assign location="hv_stopwatch" expr="true"/></onexit>
+            <onexit><assign location="hv_stopwatch" expr="true"/><send event="host.data" namelist="harelAnomalies hv_alarm1 hv_alarm2 hv_chime hv_stopwatch"/></onexit>
             <transition event="a.down" target="regular"><log label="T-14" expr="_event.name"/></transition> <!-- T-14 -->
 
             <state id="sw_zero">
@@ -441,6 +461,7 @@
             <assign location="hv_alarm2" expr="false"/>
             <assign location="hv_chime" expr="false"/>
             <assign location="hv_stopwatch" expr="false"/>
+            <send event="host.data" namelist="harelAnomalies hv_alarm1 hv_alarm2 hv_chime hv_stopwatch"/>
           </transition>
         </state>
       </state>

@@ -4,6 +4,16 @@ import QtQuick.Layouts
 
 ApplicationWindow {
     id: win
+    // The host contract (docs/HOST-CONTRACT.md). Every host (cpp/, python/, …)
+    // creates this window with these objects; the other QML files reach them by
+    // name through this window's context. Main.qml fails to load if one is missing.
+    required property QtObject tree       // ScxmlTreeModel
+    required property QtObject tracer     // TransitionTracer
+    required property QtObject buttons    // ButtonRouter
+    required property QtObject watch      // WatchModel
+    required property QtObject beeper     // Beeper
+    required property QtObject specTags   // SpecTags
+    required property var appLayout       // shared/statechart/layout.json, parsed
     width: 1600
     height: 980
     visible: true

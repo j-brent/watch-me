@@ -38,7 +38,7 @@ void TstTree::structure()
     QCOMPARE(n.value("update").kind, QStringLiteral("compound"));
     QCOMPARE(n.value("update").initial, QStringLiteral("update_sec"));
     QCOMPARE(t.ancestors("update_mon").first(), QStringLiteral("update"));
-    // every transition has a spec id, and the history defaults are not transitions
+    // every transition has a spec id; history defaults and host.* (D-24) are not transitions
     for (const auto &tr : t.transitions())
         QVERIFY2(!tr.specId.isEmpty(), qPrintable(tr.source + " " + tr.event));
     QCOMPARE(t.transitionsFrom("time").size(), 4);    // T-10 (x2), T-20, T-23
