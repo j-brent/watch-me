@@ -12,6 +12,7 @@
 #include "ScxmlTreeModel.h"
 #include "TransitionTracer.h"
 #include "ButtonRouter.h"
+#include "WatchModel.h"
 
 int main(int argc, char *argv[])
 {
@@ -41,6 +42,8 @@ int main(int argc, char *argv[])
     ScxmlTreeModel tree;
     tree.load(QStringLiteral(":/statechart/watch.scxml"));
     TransitionTracer tracer(&machine, &tree);
+    WatchModel watch(&machine);
+    watch.setRunning(true);
     ButtonRouter buttons(&machine);
     buttons.setTracer(&tracer);
 
@@ -50,6 +53,7 @@ int main(int argc, char *argv[])
     ctx->setContextProperty(QStringLiteral("tree"), &tree);
     ctx->setContextProperty(QStringLiteral("tracer"), &tracer);
     ctx->setContextProperty(QStringLiteral("buttons"), &buttons);
+    ctx->setContextProperty(QStringLiteral("watch"), &watch);
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
                      [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);

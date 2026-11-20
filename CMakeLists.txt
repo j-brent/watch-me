@@ -13,6 +13,7 @@ qt_standard_project_setup()
 # watchcore: generated state machine + value models (no QML)
 # ---------------------------------------------------------------------------
 add_library(watchcore STATIC
+    src/WatchModel.h src/WatchModel.cpp
     src/ButtonRouter.h src/ButtonRouter.cpp
     src/ScxmlTreeModel.h src/ScxmlTreeModel.cpp
     src/TransitionTracer.h src/TransitionTracer.cpp
