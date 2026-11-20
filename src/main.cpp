@@ -45,6 +45,8 @@ int main(int argc, char *argv[])
                                QStringLiteral("WxH"));
     cli.addOption(winSize);
     cli.addOption(script);
+    QCommandLineOption exitAfter(QStringLiteral("exit"), QStringLiteral("Quit when the --script has run."));
+    cli.addOption(exitAfter);
     cli.addOption(grab);
     cli.addOption(grabDelay);
     cli.process(app);
@@ -101,6 +103,8 @@ int main(int argc, char *argv[])
     std::function<void()> runNext;
     runNext = [&] {
         if (steps.isEmpty()) {
+            if (cli.isSet(exitAfter) && grabFile.isEmpty())
+                QTimer::singleShot(delay, &app, &QCoreApplication::quit);
             if (!grabFile.isEmpty())
                 QTimer::singleShot(delay, &app, [&] {
                     auto *w = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
@@ -123,6 +127,8 @@ int main(int argc, char *argv[])
             watch.setTime(parts[1].toInt(), parts[2].toInt(), parts[3].toInt());
         } else if (parts.first() == u"speed" && parts.size() == 2) {
             watch.setSpeed(parts[1].toDouble());
+        } else if (parts.first() == u"export" && parts.size() == 2) {       // export:/path/log.txt
+            tracer.exportLog(parts[1]);
         } else if (parts.first() == u"select" && parts.size() == 2) {       // select:time (statechart view)
             if (auto *root = engine.rootObjects().value(0))
                 if (auto *v = root->findChild<QObject *>(QStringLiteral("statechartView")))

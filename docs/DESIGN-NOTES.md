@@ -183,3 +183,23 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
   default branch. This is exact for interactive use (one button event per
   macrostep). A burst of many queued events can mis-attribute the source/target
   text of a line; the T-xx itself is always exact.
+
+## 3. Open deviations from the paper (summary)
+
+None of these changes behaviour that the paper specifies; each is listed with the
+decision that explains it.
+
+1. `clh(main*)` is emulated with `hv_*` flags and guarded history entries (D-2).
+2. `d → H` in update/update1/update2 is implemented as targetless increments. The
+   view therefore shows no H connector in those states (D-4).
+3. All three 2-minute returns restart on any button: the prose describes the
+   feature that way, while the figure labels are "2 min in date/update" (D-3).
+4. "b up" in T-20 is expressed through the beep-test states (D-5).
+5. T-82 carries `!In('time')`, so T-10 wins on Qt 6.4 as the W3C and Statemate
+   semantics both require (D-12).
+6. Fig. 32 is included behind `harelAnomalies` (default on); it is not in Fig. 31.
+7. The unnamed components get ids (`timedate`, `sw_nonzero`), and `out` has an
+   SCXML initial child that the paper never uses (D-17).
+8. Values the paper leaves to "activities" are assumptions: stopwatch counter
+   (D-6), alarms-beep display (D-7), power-on values (D-8), field increment rules
+   and the independent weekday (D-15).

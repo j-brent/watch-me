@@ -1,6 +1,7 @@
 #include "TransitionTracer.h"
 #include "ScxmlTreeModel.h"
 #include <QScxmlStateMachine>
+#include <QScxmlEvent>
 #include <QScxmlDataModel>
 #include <QJSValue>
 #include <QFile>
@@ -17,6 +18,16 @@ TransitionTracer::TransitionTracer(QScxmlStateMachine *machine, ScxmlTreeModel *
     // https://doc.qt.io/qt-6/qscxmlstatemachine.html#reachedStableState
     connect(machine, &QScxmlStateMachine::reachedStableState, this, &TransitionTracer::onStable);
     connect(machine, &QScxmlStateMachine::runningChanged, this, &TransitionTracer::onStable);
+    // Outgoing events (DESIGN-NOTES D-11) are logged as "◀ name {params}".
+    for (const char *spec : {"model.*", "sw.*", "beep.*"}) {
+        machine->connectToEvent(QString::fromLatin1(spec), this, [this](const QScxmlEvent &e) {
+            QString line = QStringLiteral("◀ ") + e.name();
+            const QVariantMap data = e.data().toMap();
+            for (auto it = data.cbegin(); it != data.cend(); ++it)
+                line += QStringLiteral(" %1=%2").arg(it.key(), it.value().toString());
+            append(line);
+        });
+    }
     onStable();
 }
 
@@ -164,6 +175,8 @@ bool TransitionTracer::exportLog(const QString &fileName) const
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
         return false;
     f.write(logText().toUtf8());
+    f.write("\n# active: ");
+    f.write(m_activeList.join(QLatin1Char(' ')).toUtf8());
     f.write("\n");
     return true;
 }
