@@ -1,7 +1,9 @@
 import QtQuick
+import "LcdView.mjs" as LcdView
 
 // The LCD. What it shows is a pure function of the active configuration
-// (tracer.activeSet) and WatchModel's values — spec §4. No mode logic here.
+// (tracer.activeSet) and WatchModel's values — spec §4, in LcdView.mjs. No mode
+// logic here.
 Rectangle {
     id: lcd
     property var a: tracer.activeSet          // active state ids -> true
@@ -38,79 +40,10 @@ Rectangle {
 
     Behavior on color { ColorAnimation { duration: 120 } }
 
-    readonly property var days: ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
-    function pad2(n, ch) { const s = "" + n; return s.length >= 2 ? s.slice(-2) : (ch === undefined ? "0" : ch) + s }
-    function hour12(h) { return watch.is24h ? h : ((h % 12) === 0 ? 12 : h % 12) }
-
-    // The display, derived from the configuration (spec §4).
-    readonly property var view: {
-        const v = { label: "", main: "    ", sep: ":", small: "  ", blinkMain: [], blinkSmall: false,
-                    blinkLabel: false, status: "", lap: false, ampm: "", ampmBlink: false };
-        if (lcd.dead) return v;
-        const blink = !lcd.phase2;
-        const timeMain = (h, m) => pad2(hour12(h), " ") + pad2(m);
-        const ampm = h => watch.is24h ? "24H" : (h < 12 ? "AM" : "PM");
-        if (on("update") && (on("update_mon") || on("update_date") || on("update_day") || on("update_year"))) {
-            v.label = days[watch.weekday - 1];
-            if (on("update_year")) {
-                v.main = "" + watch.year; v.sep = " ";
-                if (blink) v.blinkMain = [0, 1, 2, 3];
-            } else {
-                v.main = pad2(watch.month, " ") + pad2(watch.day, " "); v.sep = "-";
-                if (blink && on("update_mon")) v.blinkMain = [0, 1];
-                if (blink && on("update_date")) v.blinkMain = [2, 3];
-                v.blinkLabel = blink && on("update_day");
-            }
-            return v;
-        }
-        if (on("time") || on("wait") || on("update") || on("alarms_beep")) {
-            v.label = on("update") ? "SET" : days[watch.weekday - 1];
-            v.main = timeMain(watch.hour, watch.minute);
-            v.small = pad2(watch.second);
-            v.ampm = ampm(watch.hour);
-            if (blink) {
-                if (on("update_sec")) v.blinkSmall = true;
-                if (on("update_1min")) v.blinkMain = [3];
-                if (on("update_10min")) v.blinkMain = [2];
-                if (on("update_hr")) v.blinkMain = [0, 1];
-                if (on("update_mode")) v.ampmBlink = true;
-            }
-            return v;
-        }
-        if (on("date")) {
-            v.label = days[watch.weekday - 1];
-            v.main = pad2(watch.month, " ") + pad2(watch.day, " "); v.sep = "-";
-            return v;
-        }
-        for (const n of [1, 2]) {
-            if (on("alarm" + n) || on("update" + n)) {
-                const t = n === 1 ? watch.t1 : watch.t2;
-                v.label = "AL" + n;
-                v.main = timeMain(Math.floor(t / 60), t % 60);
-                v.ampm = ampm(Math.floor(t / 60));
-                v.status = on("alarm" + n + "_on") ? "ON" : on("alarm" + n + "_off") ? "OFF" : "";
-                if (blink && on("update" + n + "_hr")) v.blinkMain = [0, 1];
-                if (blink && on("update" + n + "_10min")) v.blinkMain = [2];
-                if (blink && on("update" + n + "_1min")) v.blinkMain = [3];
-                return v;
-            }
-        }
-        if (on("chime")) {
-            v.label = "CH"; v.main = "--00";
-            v.status = on("chime_on") ? "ON" : "OFF";
-            return v;
-        }
-        if (on("stopwatch")) {
-            const cs = on("sw_lap") ? watch.lapCentis : watch.stopwatchCentis;
-            const tot = Math.floor(cs / 100);
-            v.label = "ST";
-            v.main = pad2(Math.floor(tot / 60) % 60) + pad2(tot % 60);
-            v.small = pad2(cs % 100);
-            v.lap = on("sw_lap");
-            return v;
-        }
-        return v;
-    }
+    // The display, derived from the configuration (spec §4): LcdView.mjs, tested
+    // by tests/tst_lcd.cpp. Reading tracer.activeSet and watch.* inside view()
+    // makes them dependencies of this binding.
+    readonly property var view: LcdView.view(lcd.on, watch, !lcd.phase2)
 
     readonly property color ink: "#1b1f1a"
     readonly property color ghost: lit ? "#1b1f1a14" : "#1b1f1a12"

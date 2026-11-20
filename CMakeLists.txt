@@ -54,6 +54,7 @@ qt_add_qml_module(watch-me
         qml/Main.qml
         qml/WatchFace.qml
         qml/Lcd.qml
+        qml/LcdView.mjs
         qml/SevenSegment.qml
         qml/LcdDigits.qml
         qml/WatchButton.qml

@@ -263,8 +263,12 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
     `--check`: it fails on any row and when `docs/VERIFICATION.md` is stale. The
     `export:` script step takes the rest of the step as the path, so Windows paths
     (`C:\…`) work.
-  Not covered yet: the LCD rendering in `Lcd.qml` (spec §4 does not fix 24-hour
-  hour 0 or the stopwatch after 60 minutes, so expected results cannot be written).
+  - The LCD content moved from `Lcd.qml` to `qml/LcdView.mjs`, a pure function of
+    the configuration and the watch values, tested by `tst_lcd` (QJSEngine, no
+    window). Spec §4 now fixes the two open points: 24-hour hours are zero-padded
+    (`00:00` at midnight; it used to show ` 0:00`), and the stopwatch display wraps
+    from `59'59"99` to `00'00"00` while it keeps counting (it already did; now it
+    is specified and tested).
 
 ## 3. Open deviations from the paper (summary)
 

@@ -99,7 +99,7 @@ produces a self-contained install with the Qt runtime deployed next to it.
 - **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push
   to `main` and every pull request. On Ubuntu 24.04, Windows (MSVC 2022) and macOS 15
   with Qt 6.8 LTS, it builds and runs `ctest`: the Qt Test suites (`tst_watch`,
-  `tst_model`, `tst_tree`, `tst_input`), `conformance` (spec ↔ SCXML ↔ test
+  `tst_model`, `tst_tree`, `tst_input`, `tst_lcd`), `conformance` (spec ↔ SCXML ↔ test
   assertions) and `verify` (`tools/verify.py --check`: every spec row walked in the
   built app, and `docs/VERIFICATION.md` must be current). It then deploys the Qt runtime,
   smoke-tests the deployed app headless, and uploads the package as an artifact.

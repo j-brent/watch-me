@@ -256,9 +256,14 @@ carries the explicit guard `!In('time')`, which encodes the same priority.
 | alarm1/alarm2 | `HH:MM` of T1/T2 | "AL1"/"AL2" | "ON"/"OFF" (from alarmN.on/off) |
 | update1/update2 | `HH:MM` of T1/T2, field blinks | "AL1"/"AL2" | — |
 | chime | `--:00` | "CH" | "ON"/"OFF" |
-| stopwatch | `MM'SS"cc` (reg = running value, lap = frozen) | "ST" | "LAP" when lap |
+| stopwatch | `MM'SS"cc` (reg = running value, lap = frozen); after `59'59"99` the display wraps to `00'00"00` while counting goes on | "ST" | "LAP" when lap |
 | alarms-beep | the time display; whole LCD flashes | — | bell icon(s) |
 | beep-test.beep (on), chime.beep, alarms-beep | beeper indicator active | — | — |
 | power.blink | whole LCD blinks at 1 Hz | — | — |
 | light.on | backlight (green-blue glow) | — | — |
 | dead | blank | — | — |
+
+Hour digits of every `HH:MM` (time, wait, update, alarm1/alarm2, update1/update2,
+alarms-beep): in 24-hour mode `00`–`23`, zero-padded (midnight is `00:00`); in
+12-hour mode `1`–`12` with a blank instead of a leading zero (midnight and noon are
+`12:00`, AM and PM). Implemented in `qml/LcdView.mjs`, tested by `tests/tst_lcd.cpp`.
