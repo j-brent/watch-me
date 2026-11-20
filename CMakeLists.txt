@@ -35,12 +35,17 @@ qt_add_resources(watchcore "watchdata"
 # ---------------------------------------------------------------------------
 # watch-me application
 # ---------------------------------------------------------------------------
-qt_add_executable(watch-me src/main.cpp)
+qt_add_executable(watch-me src/main.cpp src/Beeper.h src/Beeper.cpp)
 qt_add_qml_module(watch-me
     URI WatchMe
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/WatchFace.qml
+        qml/Lcd.qml
+        qml/SevenSegment.qml
+        qml/LcdDigits.qml
+        qml/WatchButton.qml
         qml/StatechartView.qml
         qml/StateBox.qml
 )

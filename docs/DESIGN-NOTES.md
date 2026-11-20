@@ -151,3 +151,19 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
 - **D-13 SCXML errors are test failures.** `tst_watch` installs a message
   handler on `qt.scxml.statemachine` and fails any test during which the engine
   reported `error.execution` (Qt reports those only as debug output).
+- **D-14 Button placement.** PLAN P5 assumed a/b left and c/d right [A]. Fig. 7 of
+  the paper (journal p. 236) shows **a** at the upper left and **b, c, d** down the
+  right side (top, middle, bottom). That is now the default in
+  `statechart/layout.json` (`buttons`). The LCD layout loosely follows Fig. 7: a
+  row of four indicator windows (chime, alarm 1, alarm 2, stopwatch running) above
+  the main digits, with the AM/PM/24H indicator next to the seconds. No
+  manufacturer branding is reproduced.
+- **D-15 LCD content.** Spec §4 is implemented in `qml/Lcd.qml` as a pure
+  function of the active configuration and the WatchModel values. The `day`
+  update field changes the weekday independently of the calendar date (a weekday
+  offset), as on simple quartz watches. `update.year` shows the 4-digit year. The
+  stopwatch shows `MM:SS cc` and wraps after 60 minutes.
+- **D-16 Audio.** Optional and off by default: `Beeper` synthesises a 0.5 s tone
+  (T-56) and a looping two-tone beep (alarms-beep, chime.beep, beep-test beep.on)
+  with `QSoundEffect` when Qt Multimedia is available at build time. The visual
+  "BEEP" indicator on the LCD is always shown.

@@ -1,1 +1,7 @@
-{}
+{
+  "_comment": "View hints only (PLAN §3). Button placement follows Fig. 7 of Harel 1987.",
+  "buttons": { "a": "left-top", "b": "right-top", "c": "right-middle", "d": "right-bottom" },
+  "regionOrder": ["main", "alarm1_status", "alarm2_status", "chime_status", "light", "power"],
+  "collapsed": [],
+  "horizontal": ["alive", "displays", "timedate", "out", "regular", "sw_nonzero", "main", "watch"]
+}
