@@ -1,6 +1,7 @@
-# Release: push a tag like v1.0.0. The CI workflow is reused to build, test and
-# package on Ubuntu, Windows and macOS; only if all three pass are the packages
-# published as a GitHub release for that tag.
+# Release: push a tag like v1.0.0 (or create a release for a new tag on GitHub).
+# The CI workflow is reused to build, test and package on Ubuntu, Windows and
+# macOS; only if all three pass are the packages published: as a new GitHub
+# release, or attached to the release for that tag if one already exists.
 name: Release
 
 on:
@@ -37,15 +38,23 @@ jobs:
         working-directory: packages
         run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
 
-      - name: Create release
+      - name: Create the release, or attach to an existing one
+        # Works whether the tag was pushed with git (no release yet: create it) or the
+        # release was drafted/published by hand on GitHub (attach the packages to it,
+        # keeping its title and notes). Re-running the job replaces the assets.
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          prerelease=""
-          case "$TAG" in *-*) prerelease="--prerelease" ;; esac   # v1.0.0-rc1 etc.
-          gh release create "$TAG" packages/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "watch-me $TAG" \
-            --generate-notes \
-            --verify-tag $prerelease
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $TAG already exists: uploading the packages to it."
+            gh release upload "$TAG" packages/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            prerelease=""
+            case "$TAG" in *-*) prerelease="--prerelease" ;; esac   # v1.0.0-rc1 etc.
+            gh release create "$TAG" packages/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "watch-me $TAG" \
+              --generate-notes \
+              --verify-tag $prerelease
+          fi

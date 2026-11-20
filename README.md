@@ -106,12 +106,14 @@ produces a self-contained install with the Qt runtime deployed next to it (Qt â‰
   fourth job builds and tests against Ubuntu's own Qt 6.4 packages, the minimum
   supported version.
 - **Release** ([`.github/workflows/release.yml`](.github/workflows/release.yml)):
-  push a tag such as `v1.0.0`. It runs the CI workflow on the tag, and only if all
-  three platforms build, test and package successfully does it publish a GitHub
-  release with the three packages and a `SHA256SUMS.txt`:
-  `watch-me-<tag>-linux-x86_64.tar.gz`, `watch-me-<tag>-windows-x64.zip`,
-  `watch-me-<tag>-macos.dmg`. Tags with a hyphen (`v1.0.0-rc1`) become
-  pre-releases.
+  push a tag such as `v1.0.0`, or create a release with a new tag on GitHub. The
+  workflow runs the CI workflow on the tag. Only if all three platforms build, test
+  and package successfully does it publish the three packages and a
+  `SHA256SUMS.txt`: `watch-me-<tag>-linux-x86_64.tar.gz`,
+  `watch-me-<tag>-windows-x64.zip`, `watch-me-<tag>-macos.dmg`. If there is no
+  release for the tag yet, it creates one (tags with a hyphen, e.g. `v1.0.0-rc1`,
+  become pre-releases). If you already created the release by hand, it attaches
+  the packages to it and keeps your title and notes.
 
   ```sh
   git tag v1.0.0 && git push origin v1.0.0
