@@ -195,12 +195,18 @@ void TstWatch::displayCycle()
 
     w.click('d');
     QVERIFY(w.in("time"));
-    w.down('c');                             // wait
-    QVERIFY(w.in("wait"));
-    w.click('a');
-    QVERIFY(w.in("wait"));                   // T-15
-    w.up('c');
-    QVERIFY(w.in("time"));
+    {
+        // wait lasts 2 s; at timeScale 0.001 that is 2 ms, which a slow runner can
+        // exceed between two button events. Check wait on a real-time watch.
+        Watch rt(1.0);
+        rt.alive();
+        rt.down('c');                        // wait
+        QVERIFY(rt.in("wait"));
+        rt.click('a');
+        QVERIFY(rt.in("wait"));              // T-15
+        rt.up('c');
+        QVERIFY(rt.in("time"));
+    }
 
     // update: hold c for 2 s (2 ms here)
     w.down('c');
@@ -592,9 +598,9 @@ void TstWatch::alarmsBeep()
         w.send("T.hits.T1");                 // T-60 with alarm2 enabled but T1 != T2
         QVERIFY(w.in("alarm1_beeps"));
     }
-    // T-62 and T-64
+    // T-62 and T-64 (timeScale 0.01: alarms-beep lasts 300 ms, long enough to observe)
     {
-        Watch w;
+        Watch w(0.01);
         w.alive();
         w.setAlarms(420, 420);
         w.click('a');
@@ -624,11 +630,21 @@ void TstWatch::chimeLightBeepTest()
     w.click('d');                            // enable chime
     w.clicks("aa");
     QVERIFY(w.in("time") && w.in("chime_quiet"));
-    w.send("T.hits.hour");                   // T-70
+    w.send("T.hits.hour");                   // T-70, then T-71 after 2 s (2 ms here)
     FIRED(w, "T-70");
-    QVERIFY(w.in("chime_beep"));
-    QTRY_VERIFY_WITH_TIMEOUT(w.in("chime_quiet"), 1000);  // T-71 after 2 s
+    QTRY_VERIFY_WITH_TIMEOUT(w.in("chime_quiet"), 1000);  // T-71
     FIRED(w, "T-71");
+    {
+        // chime.beep itself lasts only 2 ms at timeScale 0.001; observe it on a
+        // real-time watch so the check cannot race the 2 s timer.
+        Watch rt(1.0);
+        rt.alive();
+        rt.clicks("aaa");
+        rt.click('d');
+        rt.clicks("aa");
+        rt.send("T.hits.hour");              // T-70
+        QVERIFY(rt.in("chime_beep"));
+    }
 
     w.down('b');                             // T-72
     FIRED(w, "T-72");
@@ -721,7 +737,7 @@ void TstWatch::scenarioBothBeepOnly()
 
 void TstWatch::scenarioAlarmTimeoutReturnsToPrevious()
 {
-    Watch w;
+    Watch w(0.01);                           // 30 s in alarms-beep = 300 ms
     w.alive();
     w.click('a');
     w.click('d');
