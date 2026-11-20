@@ -96,9 +96,13 @@ void TstInput::dataValues()
 {
     // The sim panel's "Fig. 32 quirk" box shows harelAnomalies through these.
     Rig x;
-    QCOMPARE(x.r.dataValue("harelAnomalies").toBool(), true);    // default in watch.scxml
+    // host.data at start-up (DESIGN-NOTES D-24) carries the default from watch.scxml
+    QCOMPARE(x.r.dataValue("harelAnomalies").toBool(), true);
+    QCOMPARE(x.r.dataValue("hv_alarm1").toBool(), false);
     QSignalSpy changed(&x.r, &ButtonRouter::dataValueChanged);
-    x.r.setDataValue("harelAnomalies", false);
+    x.r.setDataValue("harelAnomalies", false);   // host.anomalies, answered by host.data
+    QCOMPARE(changed.count(), 0);                // queued: nothing until the machine runs
+    settle();
     QCOMPARE(changed.count(), 1);
     QCOMPARE(changed.at(0).at(0).toString(), QStringLiteral("harelAnomalies"));
     QCOMPARE(x.r.dataValue("harelAnomalies").toBool(), false);

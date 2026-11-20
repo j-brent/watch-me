@@ -11,7 +11,8 @@ Every transition row T-xx in docs/STATECHART-SPEC.md must
      Mentions in comments, strings and NOT_FIRED do not count; comments are
      stripped before scanning.
 and every <transition> in the SCXML (except the default transition of a
-<history>, DESIGN-NOTES D-22) must carry a T-xx that exists in the spec.
+<history>, DESIGN-NOTES D-22, and the host-boundary transitions on host.*
+events, D-24) must carry a T-xx that exists in the spec.
 
 Usage: conformance.py [--scxml-only] [--root DIR]
 Exit status 0 when everything is traceable, 1 otherwise.
@@ -37,14 +38,14 @@ def key(t):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scxml-only", action="store_true", help="skip the test-coverage check")
-    ap.add_argument("--root", default=str(pathlib.Path(__file__).resolve().parent.parent))
+    ap.add_argument("--root", default=str(pathlib.Path(__file__).resolve().parents[2]))
     args = ap.parse_args()
     root = pathlib.Path(args.root)
 
     spec_text = (root / "docs/STATECHART-SPEC.md").read_text(encoding="utf-8")
     spec = set(ROW.findall(spec_text))
 
-    scxml_path = root / "statechart/watch.scxml"
+    scxml_path = root / "shared/statechart/watch.scxml"
     scxml_text = scxml_path.read_text(encoding="utf-8")
     in_scxml = set(TID.findall(scxml_text))
 
@@ -53,7 +54,8 @@ def main():
     unlabelled = []
     parent = {c: p for p in tree.iter() for c in p}
     for tr in tree.iter(NS + "transition"):
-        if parent[tr].tag == NS + "history":
+        events = tr.get("event", "").split()
+        if parent[tr].tag == NS + "history" or (events and all(e.startswith("host.") for e in events)):
             continue
         labels = [l.get("label", "") for l in tr.iter(NS + "log")]
         ok = [l for l in labels if TID.fullmatch(l) and l in spec]
@@ -64,7 +66,7 @@ def main():
     logged = {l.get("label") for l in tree.iter(NS + "log") if TID.fullmatch(l.get("label", ""))}
 
     tests, fired, row_checked = set(), set(), set()
-    for f in sorted((root / "tests").glob("*.cpp")):
+    for f in sorted((root / "cpp/tests").glob("*.cpp")):
         text = f.read_text(encoding="utf-8")
         tests |= set(TID.findall(text))
         code = COMMENTS.sub("", text)

@@ -41,6 +41,6 @@ set_tests_properties(tst_input PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen
 qt_add_executable(tst_lcd tst_lcd.cpp)
 set_target_properties(tst_lcd PROPERTIES WIN32_EXECUTABLE FALSE MACOSX_BUNDLE FALSE)
 target_link_libraries(tst_lcd PRIVATE Qt6::Qml Qt6::Test)
-target_compile_definitions(tst_lcd PRIVATE LCDVIEW_PATH="${PROJECT_SOURCE_DIR}/qml/LcdView.mjs")
+target_compile_definitions(tst_lcd PRIVATE LCDVIEW_PATH="${PROJECT_SOURCE_DIR}/shared/qml/LcdView.mjs")
 add_test(NAME tst_lcd COMMAND tst_lcd -o -,txt -o ${CMAKE_CURRENT_BINARY_DIR}/tst_lcd.log,txt)
 set_tests_properties(tst_lcd PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

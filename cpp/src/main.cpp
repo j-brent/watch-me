@@ -3,7 +3,6 @@
 #include <cstring>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
-#include <QQmlContext>
 #include <QCommandLineParser>
 #include <QTimer>
 #include <QLoggingCategory>
@@ -108,25 +107,29 @@ int main(int argc, char *argv[])
     std::unique_ptr<QQmlApplicationEngine> engine;
     if (!noGui) {
         engine = std::make_unique<QQmlApplicationEngine>();
-        auto *ctx = engine->rootContext();
-        ctx->setContextProperty(QStringLiteral("machine"), &machine);
-        ctx->setContextProperty(QStringLiteral("tree"), &tree);
-        ctx->setContextProperty(QStringLiteral("tracer"), &tracer);
-        ctx->setContextProperty(QStringLiteral("buttons"), &buttons);
-        ctx->setContextProperty(QStringLiteral("watch"), &watch);
-        ctx->setContextProperty(QStringLiteral("beeper"), &beeper);
-        ctx->setContextProperty(QStringLiteral("specTags"), &specTags);
         QVariantMap layout;
         {
             QFile lf(QStringLiteral(":/statechart/layout.json"));
             if (lf.open(QIODevice::ReadOnly))
                 layout = QJsonDocument::fromJson(lf.readAll()).toVariant().toMap();
         }
-        ctx->setContextProperty(QStringLiteral("appLayout"), layout);
+        // Main.qml's required properties: the host contract (docs/HOST-CONTRACT.md).
+        // https://doc.qt.io/qt-6/qqmlapplicationengine.html#setInitialProperties
+        engine->setInitialProperties({
+            {QStringLiteral("tree"), QVariant::fromValue<QObject *>(&tree)},
+            {QStringLiteral("tracer"), QVariant::fromValue<QObject *>(&tracer)},
+            {QStringLiteral("buttons"), QVariant::fromValue<QObject *>(&buttons)},
+            {QStringLiteral("watch"), QVariant::fromValue<QObject *>(&watch)},
+            {QStringLiteral("beeper"), QVariant::fromValue<QObject *>(&beeper)},
+            {QStringLiteral("specTags"), QVariant::fromValue<QObject *>(&specTags)},
+            {QStringLiteral("appLayout"), layout},
+        });
 
         QObject::connect(engine.get(), &QQmlApplicationEngine::objectCreationFailed, &app,
                          [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
-        engine->load(QUrl(QStringLiteral("qrc:/WatchMe/qml/Main.qml")));
+        // Main.qml by module URI and type name, wherever the module's resource prefix is.
+        // https://doc.qt.io/qt-6/qqmlapplicationengine.html#loadFromModule
+        engine->loadFromModule(QStringLiteral("WatchMe"), QStringLiteral("Main"));
 
         if (cli.isSet(winSize)) {
             const QStringList wh = cli.value(winSize).split(QLatin1Char('x'));

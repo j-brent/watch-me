@@ -39,6 +39,12 @@ is logged in `docs/DESIGN-NOTES.md` §1 as *row → old → new → figure*.
 `any button pressed` = any of `a.down | b.down | c.down | d.down`
 (SCXML: `event="a.down b.down c.down d.down"`).
 
+Host-boundary events are not part of the paper and are not spec rows: the host
+sets the alarm times with `host.alarms{T1, T2}` and the Fig. 32 flag with
+`host.anomalies{value}`, and the statechart reports `harelAnomalies` and the
+`hv_*` flags with `host.data` at start-up and whenever one changes. Hosts never
+read or write the datamodel directly (DESIGN-NOTES D-24, `docs/HOST-CONTRACT.md`). [A]
+
 There is no `tick.second` event: the per-second display refresh is a C++ property
 change, not a statechart event (nothing in Fig. 31 reacts to it). [A]
 
@@ -266,4 +272,4 @@ carries the explicit guard `!In('time')`, which encodes the same priority.
 Hour digits of every `HH:MM` (time, wait, update, alarm1/alarm2, update1/update2,
 alarms-beep): in 24-hour mode `00`–`23`, zero-padded (midnight is `00:00`); in
 12-hour mode `1`–`12` with a blank instead of a leading zero (midnight and noon are
-`12:00`, AM and PM). Implemented in `qml/LcdView.mjs`, tested by `tests/tst_lcd.cpp`.
+`12:00`, AM and PM). Implemented in `shared/qml/LcdView.mjs`, tested by `cpp/tests/tst_lcd.cpp`.

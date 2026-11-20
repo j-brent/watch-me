@@ -58,11 +58,12 @@ private:
     QScxmlStateMachine *m_machine;
     ScxmlTreeModel *m_tree;
     QSet<QString> m_active, m_prevActive, m_pendingFlash;
-    QList<QSet<QString>> m_recent;   // last stable configurations, newest first
+    QList<QSet<QString>> m_recent;   // last distinct stable configurations, newest first
     QStringList m_activeList;
     QVariantMap m_activeMap, m_flashMap;
     QStringList m_entries;
     QSet<QString> m_fired;
+    QVariantMap m_data;      // last host.data: the hv_* flags (DESIGN-NOTES D-24)
     QString m_lastSpecId;
     QElapsedTimer m_clock;
 };

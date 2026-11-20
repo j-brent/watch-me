@@ -72,6 +72,13 @@ bool ScxmlTreeModel::loadData(const QByteArray &xml)
                 // the default transition of a <history> or <initial> is not a user transition
                 if (m_nodes[owner].kind == u"history")
                     continue;
+                // host-boundary plumbing (host.*, DESIGN-NOTES D-24) is not part of the chart
+                // (only if every event of the transition is a host.* event)
+                const QStringList events = a.value(QLatin1String("event")).toString().split(u' ', Qt::SkipEmptyParts);
+                if (!events.isEmpty() && std::all_of(events.cbegin(), events.cend(), [](const QString &e) {
+                        return e.startsWith(QLatin1String("host."));
+                    }))
+                    continue;
                 ScxmlTransition t;
                 t.source = owner;
                 t.event = a.value(QLatin1String("event")).toString();

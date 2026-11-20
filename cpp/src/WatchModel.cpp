@@ -1,6 +1,5 @@
 #include "WatchModel.h"
 #include <QScxmlStateMachine>
-#include <QScxmlDataModel>
 #include <QScxmlEvent>
 
 // The simulated clock is a wall clock without time zone: use UTC as the spec so
@@ -160,12 +159,12 @@ void WatchModel::jumpBeforeAlarm(int which, int seconds)
 
 void WatchModel::pushAlarmsToMachine()
 {
-    // The ecmascript datamodel only exists once the machine is initialized (start()).
-    if (!m_machine || !m_machine->isInitialized() || !m_machine->dataModel())
+    // Host boundary (DESIGN-NOTES D-24): the statechart assigns T1/T2 on host.alarms.
+    // Queued like every input, so a later T.hits.* sees the new values.
+    if (!m_machine || !m_machine->isInitialized())
         return;
-    // https://doc.qt.io/qt-6/qscxmldatamodel.html#setScxmlProperty
-    m_machine->dataModel()->setScxmlProperty(QStringLiteral("T1"), m_t1, QString());
-    m_machine->dataModel()->setScxmlProperty(QStringLiteral("T2"), m_t2, QString());
+    m_machine->submitEvent(QStringLiteral("host.alarms"),
+                           QVariantMap{{QStringLiteral("T1"), m_t1}, {QStringLiteral("T2"), m_t2}});
 }
 
 void WatchModel::reset()

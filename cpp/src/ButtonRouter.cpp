@@ -1,8 +1,8 @@
 #include "ButtonRouter.h"
 #include "TransitionTracer.h"
 #include <QScxmlStateMachine>
-#include <QScxmlDataModel>
-#include <QJSValue>
+#include <QScxmlEvent>
+#include <utility>
 
 static bool validButton(const QString &b)
 {
@@ -12,10 +12,19 @@ static bool validButton(const QString &b)
 ButtonRouter::ButtonRouter(QScxmlStateMachine *machine, QObject *parent)
     : QObject(parent), m_machine(machine)
 {
-    // The datamodel's initial values are only readable once the machine is initialized.
-    // https://doc.qt.io/qt-6/qscxmlstatemachine.html#initialized-prop
-    connect(m_machine, &QScxmlStateMachine::initializedChanged, this,
-            [this] { emit dataValueChanged(QString()); });
+    // host.data: the statechart reports its values (DESIGN-NOTES D-24).
+    // https://doc.qt.io/qt-6/qscxmlstatemachine.html#connectToEvent
+    m_machine->connectToEvent(QStringLiteral("host.data"), this, [this](const QScxmlEvent &e) {
+        const QVariantMap now = e.data().toMap();
+        const QVariantMap before = std::exchange(m_data, now);
+        if (before.isEmpty()) {
+            emit dataValueChanged(QString());
+            return;
+        }
+        for (auto it = now.cbegin(); it != now.cend(); ++it)
+            if (before.value(it.key()) != it.value())
+                emit dataValueChanged(it.key());
+    });
 }
 
 QVariantMap ButtonRouter::held() const
@@ -62,17 +71,10 @@ void ButtonRouter::submit(const QString &event)
 
 void ButtonRouter::setDataValue(const QString &name, const QVariant &value)
 {
-    // https://doc.qt.io/qt-6/qscxmldatamodel.html#setScxmlProperty
-    if (m_machine->dataModel() && m_machine->dataModel()->setScxmlProperty(name, value, QString()))
-        emit dataValueChanged(name);
-}
-
-QVariant ButtonRouter::dataValue(const QString &name) const
-{
-    if (!m_machine->dataModel())
-        return {};
-    QVariant v = m_machine->dataModel()->scxmlProperty(name);
-    if (v.metaType() == QMetaType::fromType<QJSValue>())
-        v = v.value<QJSValue>().toVariant();
-    return v;
+    // The statechart answers with host.data, which updates dataValue().
+    if (name == u"harelAnomalies")
+        m_machine->submitEvent(QStringLiteral("host.anomalies"),
+                               QVariantMap{{QStringLiteral("value"), value.toBool()}});
+    else
+        qWarning("ButtonRouter: '%s' cannot be set (DESIGN-NOTES D-24)", qPrintable(name));
 }
