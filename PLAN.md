@@ -16,7 +16,7 @@ Non-goals: pixel-accurate Citizen artwork, embedded/RPi deployment (keep it port
 
 The spec was written without a legible copy of Fig. 31. Rows tagged **[F]** come from memory of the figure and rows tagged **[A]** are assumptions.
 
-1. Ask the user to put the PDF at `docs/harel1987.pdf`, or fetch it from https://www.inf.ed.ac.uk/teaching/courses/seoc/2006_2007/resources/statecharts.pdf.
+1. The paper is committed at `docs/harel1987.pdf` (source: https://www.state-machine.com/doc/Harel87.pdf; the old Edinburgh link is dead).
 2. Render Figs. 8–32 to PNG (`pdftoppm -r 200`) and read Fig. 31 closely.
 3. Reconcile every [F]/[A] row in the spec. Fix what the figure contradicts, change the tag to [P] where it confirms, and record each change in `docs/DESIGN-NOTES.md` as *row → old → new → figure*.
 4. Items most likely to need correction:
@@ -26,7 +26,7 @@ The spec was written without a legible copy of Fig. 31. Rows tagged **[F]** come
    - whether stopwatch is entered via history (§3.5)
    - the chime beep duration (T-71)
    - the exact beep-test entry condition (T-74)
-5. If the PDF can't be obtained, stop and ask the user. Don't build on unverified [F] rows without saying so in the README.
+5. If a figure is illegible even at higher resolution, say so. Don't build on unverified [F] rows without saying so in the README.
 
 ## 2. Tech stack
 

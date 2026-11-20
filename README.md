@@ -40,7 +40,7 @@ live view of the statechart.
 |---|---|
 | `PLAN.md` | Implementation plan: architecture, repo layout, SCXML conventions, phases P1–P8 with acceptance criteria, risks |
 | `docs/STATECHART-SPEC.md` | **Source of truth** for behaviour. Covers events, the state hierarchy, and every transition as a numbered row (`T-xx`), each tagged by confidence |
-| `docs/harel1987.pdf` | *To be added:* the paper, used to verify the spec (Step 0 of the plan) |
+| `docs/harel1987.pdf` | The paper (44 pp., from https://www.state-machine.com/doc/Harel87.pdf), used to verify the spec (Step 0 of the plan). Kept for private study; don't make the repo public with it included |
 
 ### Spec confidence tags
 
@@ -76,11 +76,10 @@ aqt install-qt linux desktop 6.8.0 linux_gcc_64 -m qtscxml qtshapes   # adjust h
 
 ## Working on this repo with Claude Code
 
-1. Add the paper as `docs/harel1987.pdf`.
-2. Start a Claude Code session on this repo with:
+1. Start a Claude Code session on this repo with:
    > Read PLAN.md and docs/STATECHART-SPEC.md and implement the plan phase by
    > phase, starting with Step 0. Commit after each phase.
-3. The plan has Claude Code create `CLAUDE.md` with the repo conventions in
+2. The plan has Claude Code create `CLAUDE.md` with the repo conventions in
    phase P1. The main rule: change the spec first, then the SCXML, then the
    tests, and keep every transition traceable to a `T-xx` row.
 
