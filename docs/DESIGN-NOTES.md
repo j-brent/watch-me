@@ -81,11 +81,13 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
 
 ## 2. Decisions (D-n)
 
-- **D-1 Qt version.** `download.qt.io` (and so `aqtinstall`) is blocked by this
-  environment's network policy (HTTP 403 from the proxy). The Ubuntu 24.04 distro
-  packages give **Qt 6.4.2** (`qt6-base-dev`, `qt6-declarative-dev`,
-  `qt6-scxml-dev`, `qml6-module-qtquick-shapes`, …). The project requires
-  Qt ≥ 6.4 and avoids APIs newer than that.
+- **D-1 Qt version.** The project requires **Qt 6.8 LTS** (`find_package(Qt6 6.8)`);
+  CI builds and tests with Qt 6.8.3 on Ubuntu, Windows and macOS. History: the
+  first development environment could not reach download.qt.io, so the code was
+  written and tested against Ubuntu 24.04's Qt 6.4.2 packages, and for a while Qt
+  6.4 was the documented minimum with its own CI job. That was an artifact of the
+  environment, not a requirement, and was dropped. The Qt 6.4 workarounds (D-2,
+  D-11, D-12, D-18) remain: they are correct on 6.8 as well.
 - **D-2 clh(main\*).** Emulated with the `hv` ("history valid") datamodel object,
   see spec §3.1. Only entries whose history could predate the last `dead` need the
   guard: T-10 (alarm1), T-11 (alarm2), T-12 (chime), T-13 (stopwatch). T-32/T-34
@@ -187,9 +189,8 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
   text of a line; the T-xx itself is always exact.
 - **D-19 CI and releases.** GitHub-hosted runners can reach download.qt.io, so CI
   uses Qt 6.8 LTS (via `jurplel/install-qt-action`) on Ubuntu, Windows and macOS.
-  A separate job builds against Ubuntu's Qt 6.4 so the documented minimum stays
-  true. Packaging uses Qt's own deployment (`qt_generate_deploy_qml_app_script`,
-  behind `-DWATCHME_DEPLOY=ON`, Qt ≥ 6.5), so `cmake --install` produces a
+  Packaging uses Qt's own deployment (`qt_generate_deploy_qml_app_script`,
+  behind `-DWATCHME_DEPLOY=ON`), so `cmake --install` produces a
   self-contained tree on all three platforms. The release workflow reuses the CI
   workflow (`workflow_call`), so published packages are exactly the tested
   ones. To make the code build on MSVC: `/utf-8` (non-ASCII literals) and

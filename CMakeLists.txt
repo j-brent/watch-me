@@ -10,12 +10,12 @@ if(MSVC)
 endif()
 
 # Release packaging: `cmake --install` also deploys the Qt runtime next to the app
-# (windeployqt / macdeployqt / Linux deploy). Needs a non-system Qt >= 6.5 on Linux.
+# (windeployqt / macdeployqt / Linux deploy). On Linux it needs a non-system Qt.
 option(WATCHME_DEPLOY "Deploy the Qt runtime on install (for release packages)" OFF)
 
-# Qt >= 6.4 (6.4.2 is what the build environment provides, see DESIGN-NOTES D-1).
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Qml Quick Scxml Test)
-find_package(Qt6 6.4 QUIET COMPONENTS Multimedia)
+# Qt 6.8 LTS or newer (DESIGN-NOTES D-1).
+find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Qml Quick Scxml Test)
+find_package(Qt6 6.8 QUIET COMPONENTS Multimedia)
 qt_standard_project_setup()
 
 # ---------------------------------------------------------------------------
@@ -88,9 +88,6 @@ install(TARGETS watch-me
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 if(WATCHME_DEPLOY)
-    if(Qt6_VERSION VERSION_LESS 6.5)
-        message(FATAL_ERROR "WATCHME_DEPLOY needs Qt >= 6.5 (found ${Qt6_VERSION})")
-    endif()
     # (qt_standard_project_setup already gives Linux installs an $ORIGIN/../lib RPATH)
     qt_generate_deploy_qml_app_script(
         TARGET watch-me

@@ -14,6 +14,7 @@
 - Record every decision or deviation from the paper in `docs/DESIGN-NOTES.md`.
 - Don't hand-edit generated files in `build/`.
 - Cite Qt and SCXML doc URLs in comments for non-obvious APIs.
-- Qt 6.4 is the minimum (distro packages); don't use APIs newer than that.
+- Qt 6.8 LTS is the requirement (`find_package(Qt6 6.8 …)`); CI builds with it on
+  Ubuntu, Windows and macOS.
 - Build/test: `cmake -B build -G Ninja && cmake --build build && ctest --test-dir build`
   (GUI parts run headless with `QT_QPA_PLATFORM=offscreen`).

@@ -74,7 +74,7 @@ Some things to try (all from the paper):
 
 ## Building
 
-Requirements: Qt ≥ 6.4 with Qt Quick, Qt Quick Shapes, Qt SCXML and Qt Test (Qt
+Requirements: Qt 6.8 (LTS) or newer with Qt Quick, Qt Quick Shapes, Qt SCXML and Qt Test (Qt
 Multimedia optional, for sound); CMake ≥ 3.21; Ninja; a C++20 compiler; Python 3
 for the conformance check.
 
@@ -85,26 +85,21 @@ ctest --test-dir build             # tst_watch, tst_model, tst_tree, conformance
 ./build/watch-me                   # --auto-insert to start with a battery
 ```
 
-The project was developed with the Ubuntu 24.04 packages (Qt 6.4.2):
-`qt6-base-dev qt6-declarative-dev qt6-scxml-dev qml6-module-qtquick-shapes
-qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window
-qml6-module-qtqml-workerscript qml6-module-qtquick-templates` (+ `qt6-multimedia-dev`
-for sound). With `aqtinstall` (Qt Quick Shapes ships with the base Qt Declarative
-module; only SCXML and, optionally, Multimedia are add-ons):
+Qt 6.8 from the Qt online installer, or with `aqtinstall` (Qt Quick Shapes ships
+with the base Qt Declarative module; only SCXML and, optionally, Multimedia are
+add-ons):
 `aqt install-qt linux desktop 6.8.3 linux_gcc_64 -m qtscxml qtmultimedia`.
 
 On macOS the app builds as `build/watch-me.app`, on Windows as a GUI executable.
 `cmake -B build -G Ninja -DWATCHME_DEPLOY=ON` plus `cmake --install build --prefix dist`
-produces a self-contained install with the Qt runtime deployed next to it (Qt ≥ 6.5).
+produces a self-contained install with the Qt runtime deployed next to it.
 
 ## CI and releases
 
 - **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push
   to `main` and every pull request. On Ubuntu 24.04, Windows (MSVC 2022) and macOS 15
   with Qt 6.8 LTS, it builds and runs `ctest`. It then deploys the Qt runtime,
-  smoke-tests the deployed app headless, and uploads the package as an artifact. A
-  fourth job builds and tests against Ubuntu's own Qt 6.4 packages, the minimum
-  supported version.
+  smoke-tests the deployed app headless, and uploads the package as an artifact.
 - **Release** ([`.github/workflows/release.yml`](.github/workflows/release.yml)):
   push a tag such as `v1.0.0`, or create a release with a new tag on GitHub. The
   workflow runs the CI workflow on the tag. Only if all three platforms build, test
@@ -163,7 +158,7 @@ Where the paper is silent or SCXML/Qt differ, the choice is documented in
   increments in SCXML. The configuration after the step is identical (D-4).
 - All three 2-minute returns restart on any button, following the prose (D-3).
 - Fig. 32 (a silences the beep-test) is behind a flag, on by default.
-- Qt 6.4 specifics: `type="qt:signal"` is rejected, so outgoing events are plain
+- Qt SCXML specifics found during development (on Qt 6.4): `type="qt:signal"` is rejected, so outgoing events are plain
   `<send>`s (D-11). One transition conflict needed an explicit priority guard
   (D-12).
 

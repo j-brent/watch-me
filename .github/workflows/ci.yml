@@ -26,7 +26,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  QT_VERSION: "6.8.3"          # LTS; the code itself needs Qt >= 6.4 (see the distro job)
+  QT_VERSION: "6.8.3"          # Qt 6.8 LTS: the project requires 6.8
   QT_QPA_PLATFORM: offscreen   # all GUI code and tests run headless
   CTEST_OUTPUT_ON_FAILURE: "1"
 
@@ -150,25 +150,3 @@ jobs:
           name: smoke-screenshot-${{ runner.os }}
           path: smoke.png
           if-no-files-found: ignore
-
-  # Keeps the documented minimum honest: Ubuntu's own Qt 6.4 packages, as used in
-  # development (DESIGN-NOTES D-1). Build and tests only, no package.
-  distro-qt-6-4:
-    name: Ubuntu (distro Qt 6.4)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Qt 6.4 from Ubuntu
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ninja-build cmake g++ \
-            qt6-base-dev qt6-declarative-dev qt6-scxml-dev qml6-module-qtquick-shapes \
-            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
-            qml6-module-qtquick-window qml6-module-qtqml-workerscript qml6-module-qtquick-templates \
-            libgl1-mesa-dev
-      - name: Configure
-        run: cmake -B build -G Ninja
-      - name: Build
-        run: cmake --build build --parallel
-      - name: Test
-        run: ctest --test-dir build --timeout 300
