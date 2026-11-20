@@ -15,7 +15,7 @@ if(Python3_FOUND)
     add_test(NAME verify
              COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/verify.py
                      --check --bin $<TARGET_FILE:watch-me>)
-    set_tests_properties(verify PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600)
+    set_tests_properties(verify PROPERTIES TIMEOUT 600)     # the app runs with --no-gui
 else()
     message(WARNING "Python 3 not found: the conformance and verify tests are not registered")
 endif()

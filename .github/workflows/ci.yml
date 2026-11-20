@@ -27,7 +27,10 @@ concurrency:
 
 env:
   QT_VERSION: "6.8.3"          # Qt 6.8 LTS: the project requires 6.8
-  QT_QPA_PLATFORM: offscreen   # all GUI code and tests run headless
+  # Safety net only: no CI step needs a display. The Qt Test suites are GUI-less,
+  # verify runs the app with --no-gui, and the smoke test unsets this variable to
+  # run the packaged app on the platform's real display plugin.
+  QT_QPA_PLATFORM: offscreen
   CTEST_OUTPUT_ON_FAILURE: "1"
 
 jobs:

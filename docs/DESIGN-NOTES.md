@@ -262,12 +262,17 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
   - `tools/verify.py` runs as the ctest `verify` on every CI platform, with
     `--check`: it fails on any row and when `docs/VERIFICATION.md` is stale. The
     `export:` script step takes the rest of the step as the path, so Windows paths
-    (`C:\…`) work. The walk runs the app with `QT_QPA_PLATFORM=offscreen` and
-    `QT_QUICK_CONTROLS_STYLE=Fusion`. On macOS CI every run crashed at start-up
-    (SIGSEGV) under offscreen; the default controls style there is the native
-    "macOS" style, which draws through AppKit and needs the cocoa platform (the
-    deployed app's smoke test, which runs on cocoa, passes). A first attempt with
-    Qt Quick's software renderer did not change the crash and was reverted.
+    (`C:\…`) work. The walk runs the app with `--no-gui`: a QCoreApplication
+    with the statechart, clock, `ButtonRouter`, event log and `--script`, but no
+    QML window and no platform plugin. The walk checks behaviour, not rendering.
+    With the window, under the offscreen platform, every run crashed at start-up
+    (SIGSEGV) on macOS CI, which had never started the app headless before (the
+    smoke test runs the packaged app on cocoa). The cause was the native "macOS"
+    Qt Quick Controls style, which draws through AppKit and needs cocoa: the
+    software renderer did not help, the Fusion style did (CI green on all three
+    platforms). Rather than pin a style that survives offscreen, the walk no
+    longer creates the window at all. That QML loads is checked by the smoke test, on each
+    platform's real display plugin.
   - The LCD content moved from `Lcd.qml` to `qml/LcdView.mjs`, a pure function of
     the configuration and the watch values, tested by `tst_lcd` (QJSEngine, no
     window). Spec §4 now fixes the two open points: 24-hour hours are zero-padded

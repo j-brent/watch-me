@@ -1,4 +1,6 @@
 #include <functional>
+#include <memory>
+#include <cstring>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -21,7 +23,20 @@
 
 int main(int argc, char *argv[])
 {
-    QGuiApplication app(argc, argv);
+    // --no-gui: no window, no QML, no platform plugin (QCoreApplication). The
+    // statechart, clock, input path (ButtonRouter), event log and --script run as
+    // usual. tools/verify.py uses it: the walk checks behaviour, not rendering.
+    // It must be known before the application object exists, so look for it here;
+    // QCommandLineParser below documents and validates it.
+    bool noGui = false;
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--no-gui") == 0)
+            noGui = true;
+    // https://doc.qt.io/qt-6/qcoreapplication.html (no GUI) vs.
+    // https://doc.qt.io/qt-6/qguiapplication.html (loads the platform plugin)
+    const std::unique_ptr<QCoreApplication> appPtr(noGui ? new QCoreApplication(argc, argv)
+                                                         : new QGuiApplication(argc, argv));
+    QCoreApplication &app = *appPtr;
     // <log> elements are spec-row markers for TransitionTracer, not console output.
     QLoggingCategory::setFilterRules(QStringLiteral("scxml.statemachine.debug=false"));
     app.setApplicationName(QStringLiteral("watch-me"));
@@ -54,7 +69,15 @@ int main(int argc, char *argv[])
     cli.addOption(exitAfter);
     cli.addOption(grab);
     cli.addOption(grabDelay);
+    QCommandLineOption noGuiOption(QStringLiteral("no-gui"),
+        QStringLiteral("No window: run the statechart, input path, event log and --script only "
+                       "(used by tools/verify.py). Not with --grab, --size or 'select:' steps."));
+    cli.addOption(noGuiOption);
     cli.process(app);
+    if (noGui && (cli.isSet(grab) || cli.isSet(winSize))) {
+        qCritical("watch-me: --grab and --size need the window; they cannot be used with --no-gui.");
+        return 1;
+    }
 
     WatchMachine machine;
     // The ecmascript datamodel is a Qt SCXML plugin; without it every condition and
@@ -82,31 +105,34 @@ int main(int argc, char *argv[])
     QObject::connect(&watch, &WatchModel::shortBeep, &beeper, &Beeper::shortBeep);
     buttons.setTracer(&tracer);
 
-    QQmlApplicationEngine engine;
-    auto *ctx = engine.rootContext();
-    ctx->setContextProperty(QStringLiteral("machine"), &machine);
-    ctx->setContextProperty(QStringLiteral("tree"), &tree);
-    ctx->setContextProperty(QStringLiteral("tracer"), &tracer);
-    ctx->setContextProperty(QStringLiteral("buttons"), &buttons);
-    ctx->setContextProperty(QStringLiteral("watch"), &watch);
-    ctx->setContextProperty(QStringLiteral("beeper"), &beeper);
-    ctx->setContextProperty(QStringLiteral("specTags"), &specTags);
-    QVariantMap layout;
-    {
-        QFile lf(QStringLiteral(":/statechart/layout.json"));
-        if (lf.open(QIODevice::ReadOnly))
-            layout = QJsonDocument::fromJson(lf.readAll()).toVariant().toMap();
-    }
-    ctx->setContextProperty(QStringLiteral("appLayout"), layout);
+    std::unique_ptr<QQmlApplicationEngine> engine;
+    if (!noGui) {
+        engine = std::make_unique<QQmlApplicationEngine>();
+        auto *ctx = engine->rootContext();
+        ctx->setContextProperty(QStringLiteral("machine"), &machine);
+        ctx->setContextProperty(QStringLiteral("tree"), &tree);
+        ctx->setContextProperty(QStringLiteral("tracer"), &tracer);
+        ctx->setContextProperty(QStringLiteral("buttons"), &buttons);
+        ctx->setContextProperty(QStringLiteral("watch"), &watch);
+        ctx->setContextProperty(QStringLiteral("beeper"), &beeper);
+        ctx->setContextProperty(QStringLiteral("specTags"), &specTags);
+        QVariantMap layout;
+        {
+            QFile lf(QStringLiteral(":/statechart/layout.json"));
+            if (lf.open(QIODevice::ReadOnly))
+                layout = QJsonDocument::fromJson(lf.readAll()).toVariant().toMap();
+        }
+        ctx->setContextProperty(QStringLiteral("appLayout"), layout);
 
-    QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
-                     [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
-    engine.load(QUrl(QStringLiteral("qrc:/WatchMe/qml/Main.qml")));
+        QObject::connect(engine.get(), &QQmlApplicationEngine::objectCreationFailed, &app,
+                         [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
+        engine->load(QUrl(QStringLiteral("qrc:/WatchMe/qml/Main.qml")));
 
-    if (cli.isSet(winSize)) {
-        const QStringList wh = cli.value(winSize).split(QLatin1Char('x'));
-        if (auto *w = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0)); w && wh.size() == 2)
-            w->resize(wh[0].toInt(), wh[1].toInt());
+        if (cli.isSet(winSize)) {
+            const QStringList wh = cli.value(winSize).split(QLatin1Char('x'));
+            if (auto *w = qobject_cast<QQuickWindow *>(engine->rootObjects().value(0)); w && wh.size() == 2)
+                w->resize(wh[0].toInt(), wh[1].toInt());
+        }
     }
     machine.start();
     if (cli.isSet(autoInsert))
@@ -123,7 +149,7 @@ int main(int argc, char *argv[])
                 QTimer::singleShot(delay, &app, &QCoreApplication::quit);
             if (!grabFile.isEmpty())
                 QTimer::singleShot(delay, &app, [&] {
-                    auto *w = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
+                    auto *w = qobject_cast<QQuickWindow *>(engine->rootObjects().value(0));
                     if (w && !w->grabWindow().save(grabFile))
                         qWarning("could not save %s", qPrintable(grabFile));
                     QCoreApplication::quit();
@@ -152,7 +178,9 @@ int main(int argc, char *argv[])
             if (!tracer.exportLog(s.mid(7)))
                 qWarning("could not export the log to %s", qPrintable(s.mid(7)));
         } else if (parts.first() == u"select" && parts.size() == 2) {       // select:time (statechart view)
-            if (auto *root = engine.rootObjects().value(0))
+            if (!engine)
+                qWarning("watch-me: 'select:' needs the window; ignored with --no-gui");
+            else if (auto *root = engine->rootObjects().value(0))
                 if (auto *v = root->findChild<QObject *>(QStringLiteral("statechartView")))
                     v->setProperty("selected", parts[1]);
         } else if (parts.first() == u"set" && parts.size() == 3) {          // set:harelAnomalies:false
