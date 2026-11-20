@@ -100,7 +100,7 @@ produces a self-contained install with the Qt runtime deployed next to it (Qt â‰
 ## CI and releases
 
 - **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push
-  to `main` and every pull request. On Ubuntu 24.04, Windows (MSVC 2022) and macOS 14
+  to `main` and every pull request. On Ubuntu 24.04, Windows (MSVC 2022) and macOS 15
   with Qt 6.8 LTS, it builds and runs `ctest`. It then deploys the Qt runtime,
   smoke-tests the deployed app headless, and uploads the package as an artifact. A
   fourth job builds and tests against Ubuntu's own Qt 6.4 packages, the minimum

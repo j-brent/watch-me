@@ -87,8 +87,8 @@ install(TARGETS watch-me
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 if(WATCHME_DEPLOY)
-    if(QT_VERSION VERSION_LESS 6.5)
-        message(FATAL_ERROR "WATCHME_DEPLOY needs Qt >= 6.5 (found ${QT_VERSION})")
+    if(Qt6_VERSION VERSION_LESS 6.5)
+        message(FATAL_ERROR "WATCHME_DEPLOY needs Qt >= 6.5 (found ${Qt6_VERSION})")
     endif()
     # (qt_standard_project_setup already gives Linux installs an $ORIGIN/../lib RPATH)
     qt_generate_deploy_qml_app_script(

@@ -45,7 +45,7 @@ jobs:
             os: windows-2022
             package: watch-me-windows-x64.zip
           - name: macOS
-            os: macos-14
+            os: macos-15
             package: watch-me-macos.dmg
     defaults:
       run:
