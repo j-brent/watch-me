@@ -140,7 +140,11 @@ def run(row):
         out = os.path.join(d, "log.txt")
         script = "battery.inserted;wait:150;" + ";".join(
             s + ";wait:120" for s in steps.split(";") if s) + f";wait:200;export:{out}"
-        env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
+        # Headless, and Qt Quick's software renderer: the walk checks the statechart and
+        # its event log, not rendering. With the default renderer (Metal) the app
+        # crashed with SIGSEGV under the offscreen platform on macOS CI.
+        # https://doc.qt.io/qt-6/qtquick-visualcanvas-adaptations.html
+        env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_QUICK_BACKEND="software")
         app_status = ""
         try:
             proc = subprocess.run([str(BIN), "--time", "1987-06-01T10:08:30", "--manual-time", "--exit",

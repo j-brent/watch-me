@@ -262,7 +262,10 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
   - `tools/verify.py` runs as the ctest `verify` on every CI platform, with
     `--check`: it fails on any row and when `docs/VERIFICATION.md` is stale. The
     `export:` script step takes the rest of the step as the path, so Windows paths
-    (`C:\…`) work.
+    (`C:\…`) work. The walk runs the app with `QT_QPA_PLATFORM=offscreen` and
+    `QT_QUICK_BACKEND=software`: on macOS CI the default (Metal) renderer made
+    every run crash with SIGSEGV under the offscreen platform, and the walk checks
+    behaviour and the event log, not rendering.
   - The LCD content moved from `Lcd.qml` to `qml/LcdView.mjs`, a pure function of
     the configuration and the watch values, tested by `tst_lcd` (QJSEngine, no
     window). Spec §4 now fixes the two open points: 24-hour hours are zero-padded
