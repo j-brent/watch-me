@@ -30,14 +30,14 @@ ApplicationWindow {
             Layout.maximumWidth: 480
             Layout.fillHeight: true
             WatchFace { Layout.alignment: Qt.AlignHCenter }
-            RowLayout {
-                Button {
-                    text: tracer.activeSet["dead"] ? "Insert battery" : "Remove battery"
-                    focusPolicy: Qt.NoFocus
-                    onClicked: buttons.submit(tracer.activeSet["dead"] ? "battery.inserted" : "battery.removed")
-                }
+            Label {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: tracer.activeSet["dead"] ? "No battery — press “inserted” below."
+                                               : "Mouse: press/hold the side buttons · Keys: hold A B C D"
+                color: "#5a5d63"; font.pixelSize: 12
             }
-            Legend { Layout.fillWidth: true }
+            SimPanel { Layout.fillWidth: true }
             EventLog {
                 Layout.fillWidth: true
                 Layout.fillHeight: true

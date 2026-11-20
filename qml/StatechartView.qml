@@ -81,9 +81,16 @@ Item {
         }
     }
 
+    Legend {
+        id: legend
+        visible: legendToggle.checked
+        anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 6
+    }
+
     Row {
         anchors.right: parent.right; anchors.top: parent.top; anchors.margins: 6
         spacing: 4
+        Button { id: legendToggle; text: "legend"; checkable: true; checked: true; focusPolicy: Qt.NoFocus }
         Button { text: "−"; width: 30; focusPolicy: Qt.NoFocus; onClicked: { view.autoFit = false; view.zoom /= 1.15 } }
         Button { text: "fit"; width: 40; focusPolicy: Qt.NoFocus; onClicked: { view.autoFit = true; view.fit() } }
         Button { text: "+"; width: 30; focusPolicy: Qt.NoFocus; onClicked: { view.autoFit = false; view.zoom *= 1.15 } }

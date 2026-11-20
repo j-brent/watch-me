@@ -1,6 +1,8 @@
 #include "ButtonRouter.h"
 #include "TransitionTracer.h"
 #include <QScxmlStateMachine>
+#include <QScxmlDataModel>
+#include <QJSValue>
 
 static bool validButton(const QString &b)
 {
@@ -50,4 +52,20 @@ void ButtonRouter::submit(const QString &event)
         m_tracer->noteInput(event);
     // https://doc.qt.io/qt-6/qscxmlstatemachine.html#submitEvent-1
     m_machine->submitEvent(event);
+}
+
+void ButtonRouter::setDataValue(const QString &name, const QVariant &value)
+{
+    if (m_machine->dataModel())
+        m_machine->dataModel()->setScxmlProperty(name, value, QString());
+}
+
+QVariant ButtonRouter::dataValue(const QString &name) const
+{
+    if (!m_machine->dataModel())
+        return {};
+    QVariant v = m_machine->dataModel()->scxmlProperty(name);
+    if (v.metaType() == QMetaType::fromType<QJSValue>())
+        v = v.value<QJSValue>().toVariant();
+    return v;
 }

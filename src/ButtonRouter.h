@@ -22,6 +22,9 @@ public:
     Q_INVOKABLE void release(const QString &button);
     Q_INVOKABLE void releaseAll();
     Q_INVOKABLE void submit(const QString &event);   // any other external event
+    // Sim panel: write a datamodel value (e.g. the harelAnomalies flag).
+    Q_INVOKABLE void setDataValue(const QString &name, const QVariant &value);
+    Q_INVOKABLE QVariant dataValue(const QString &name) const;
 
 signals:
     void heldChanged();

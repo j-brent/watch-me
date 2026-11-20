@@ -52,6 +52,7 @@ qt_add_qml_module(watch-me
         qml/TransitionOverlay.qml
         qml/Legend.qml
         qml/EventLog.qml
+        qml/SimPanel.qml
 )
 target_link_libraries(watch-me PRIVATE watchcore Qt6::Quick)
 if(TARGET Qt6::Multimedia)
