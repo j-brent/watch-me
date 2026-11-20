@@ -147,8 +147,10 @@ int main(int argc, char *argv[])
             watch.advance(parts[1].toLongLong());
         } else if (parts.first() == u"speed" && parts.size() == 2) {
             watch.setSpeed(parts[1].toDouble());
-        } else if (parts.first() == u"export" && parts.size() == 2) {       // export:/path/log.txt
-            tracer.exportLog(parts[1]);
+        } else if (s.startsWith(QLatin1String("export:"))) {              // export:/path/log.txt
+            // the rest of the step, whole: a Windows path has a ':' of its own (C:\...)
+            if (!tracer.exportLog(s.mid(7)))
+                qWarning("could not export the log to %s", qPrintable(s.mid(7)));
         } else if (parts.first() == u"select" && parts.size() == 2) {       // select:time (statechart view)
             if (auto *root = engine.rootObjects().value(0))
                 if (auto *v = root->findChild<QObject *>(QStringLiteral("statechartView")))

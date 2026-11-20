@@ -241,6 +241,30 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
   transition of the paper's figure, and no event takes it. It has no spec row,
   `<!-- T-xx -->` or `<log>`; `conformance.py` and `ScxmlTreeModel` skip it, and
   CLAUDE.md states the exception.
+- **D-23 Test strategy after the test review.** A review against Myers' method
+  (with mutation probes as a cross-check) found the suites strong on transitions
+  and timer boundaries but thin on compound conditions, history after a battery
+  cycle, "any button" rows, unexpected input and the code around the statechart.
+  Changes:
+  - `tst_watch`: P2 with T1 == T2; history recorded as "on" and forgotten after
+    `battery.removed`; T-47 and T-63 with every button (data-driven); events that
+    must change nothing (dead, `battery.inserted` while alive, a second
+    `battery.weakens`, releases without presses).
+  - `tst_model`: setter clamping and wrapping (now stated in `WatchModel.h`),
+    `jumpBeforeAlarm` rolling to tomorrow, alarm and hour at midnight. Every
+    event is settled before the next step, except where a test queues on purpose.
+  - `tst_input` (new): `ButtonRouter` with repeated, unheld and invalid input,
+    `releaseAll`, and the datamodel values behind the sim panel.
+  - `conformance.py` counts assertions, not mentions: `FIRED(w, "T-xx")` for rows
+    with a `<log>`, `ROW_CHECK("T-xx", …)` for the two rows without one; comments
+    are stripped first. `fired` accumulates until `reset()`, so tests reset before
+    the step a FIRED is meant to check.
+  - `tools/verify.py` runs as the ctest `verify` on every CI platform, with
+    `--check`: it fails on any row and when `docs/VERIFICATION.md` is stale. The
+    `export:` script step takes the rest of the step as the path, so Windows paths
+    (`C:\…`) work.
+  Not covered yet: the LCD rendering in `Lcd.qml` (spec §4 does not fix 24-hour
+  hour 0 or the stopwatch after 60 minutes, so expected results cannot be written).
 
 ## 3. Open deviations from the paper (summary)
 

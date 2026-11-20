@@ -1,5 +1,10 @@
 // WatchModel arithmetic and its two event boundaries with the state machine.
 // Behaviour (modes) is tested in tst_watch; this file only checks values.
+//
+// Event delivery: like tst_watch, every event is followed by settle() (send/click),
+// so the machine has handled it before the next step. The one exception is
+// resetBeforeQueuedInput, which queues on purpose to check queued input is handled
+// in order, and says so.
 #include <QtTest>
 #include <QSignalSpy>
 #include "watch.h"
@@ -10,6 +15,12 @@ class TstModel : public QObject
     Q_OBJECT
 private:
     static void settle() { for (int i = 0; i < 5; ++i) QCoreApplication::processEvents(); }
+    static void send(QScxmlStateMachine &sm, const char *event) { sm.submitEvent(QString::fromLatin1(event)); settle(); }
+    static void click(QScxmlStateMachine &sm, char b)
+    {
+        send(sm, QByteArray(1, b).append(".down").constData());
+        send(sm, QByteArray(1, b).append(".up").constData());
+    }
 private slots:
     void increments();
     void dateClampAndLeapYears();
@@ -22,6 +33,9 @@ private slots:
     void resetBeforeQueuedInput();
     void timeChangedOnWholeHours();
     void stopwatchKeepsMilliseconds();
+    void settersClampAndWrap();
+    void jumpBeforeAlarmRollsToTomorrow();
+    void midnightHits();
 };
 
 void TstModel::increments()
@@ -142,15 +156,15 @@ void TstModel::acceptanceAlarmWithinThreeSeconds()
     WatchModel m(&sm);
     sm.start();
     settle();
-    sm.submitEvent("battery.inserted");
+    send(sm, "battery.inserted");
     settle();
     m.setAlarm(1, 7 * 60 + 15);
-    sm.submitEvent("a.down"); sm.submitEvent("a.up");   // alarm1
-    sm.submitEvent("d.down"); sm.submitEvent("d.up");   // enable
-    sm.submitEvent("a.down"); sm.submitEvent("a.up");
-    sm.submitEvent("a.down"); sm.submitEvent("a.up");
-    sm.submitEvent("a.down"); sm.submitEvent("a.up");
-    sm.submitEvent("a.down"); sm.submitEvent("a.up");   // back to time
+    click(sm, 'a');   // alarm1
+    click(sm, 'd');   // enable
+    click(sm, 'a');
+    click(sm, 'a');
+    click(sm, 'a');
+    click(sm, 'a');   // back to time
     settle();
     QVERIFY(sm.isActive("alarm1_enabled") && sm.isActive("time"));
     m.jumpBeforeAlarm(1, 2);
@@ -171,40 +185,40 @@ void TstModel::stopwatchCountsWhileElsewhere()
     WatchModel m(&sm);
     sm.start();
     settle();
-    sm.submitEvent("battery.inserted");
-    for (int i = 0; i < 4; ++i) { sm.submitEvent("a.down"); sm.submitEvent("a.up"); }
+    send(sm, "battery.inserted");
+    for (int i = 0; i < 4; ++i) { click(sm, 'a'); }
     settle();
     QVERIFY(sm.isActive("sw_zero"));
-    sm.submitEvent("b.down"); sm.submitEvent("b.up");      // start
+    click(sm, 'b');      // start
     settle();
     QVERIFY(m.stopwatchRunning());
     m.advance(1500);
     QCOMPARE(m.stopwatchCentis(), 150);
-    sm.submitEvent("a.down"); sm.submitEvent("a.up");      // leave to time
+    click(sm, 'a');      // leave to time
     settle();
     QVERIFY(sm.isActive("time"));
     m.advance(2000);
     QCOMPARE(m.stopwatchCentis(), 350);                    // still counting
-    sm.submitEvent("d.down"); sm.submitEvent("d.up");      // date
+    click(sm, 'd');      // date
     m.advance(500);
     settle();
-    for (int i = 0; i < 1; ++i) { sm.submitEvent("d.down"); sm.submitEvent("d.up"); }
-    for (int i = 0; i < 4; ++i) { sm.submitEvent("a.down"); sm.submitEvent("a.up"); }
+    click(sm, 'd');
+    for (int i = 0; i < 4; ++i) { click(sm, 'a'); }
     settle();
     QVERIFY(sm.isActive("sw_on"));
     QCOMPARE(m.stopwatchCentis(), 400);
-    sm.submitEvent("d.down"); sm.submitEvent("d.up");      // lap freezes the shown value
+    click(sm, 'd');      // lap freezes the shown value
     settle();
     QCOMPARE(m.lapCentis(), 400);
     m.advance(1000);
     QCOMPARE(m.lapCentis(), 400);
     QCOMPARE(m.stopwatchCentis(), 500);
-    sm.submitEvent("b.down"); sm.submitEvent("b.up");      // stop
+    click(sm, 'b');      // stop
     settle();
     m.advance(1000);
     QCOMPARE(m.stopwatchCentis(), 500);
-    sm.submitEvent("d.down"); sm.submitEvent("d.up");      // lap -> reg
-    sm.submitEvent("d.down"); sm.submitEvent("d.up");      // reg (in off) -> zero
+    click(sm, 'd');      // lap -> reg
+    click(sm, 'd');      // reg (in off) -> zero
     settle();
     QVERIFY(sm.isActive("sw_zero"));
     QCOMPARE(m.stopwatchCentis(), 0);
@@ -219,7 +233,7 @@ void TstModel::resetOnBatteryInsert()
     m.setAlarm(1, 5);
     sm.start();
     settle();
-    sm.submitEvent("battery.inserted");
+    send(sm, "battery.inserted");
     settle();
     QCOMPARE(m.t1(), 12 * 60);
     QCOMPARE(m.hour(), 3);
@@ -235,6 +249,7 @@ void TstModel::resetBeforeQueuedInput()
     WatchModel m(&sm);
     sm.start();
     settle();
+    // deliberately queued: all of this is submitted before the machine runs
     sm.submitEvent("battery.inserted");
     for (int i = 0; i < 4; ++i) { sm.submitEvent("a.down"); sm.submitEvent("a.up"); }
     sm.submitEvent("b.down");                               // T-50: start
@@ -266,19 +281,88 @@ void TstModel::stopwatchKeepsMilliseconds()
     WatchModel m(&sm);
     sm.start();
     settle();
-    sm.submitEvent("battery.inserted");
-    for (int i = 0; i < 4; ++i) { sm.submitEvent("a.down"); sm.submitEvent("a.up"); }
+    send(sm, "battery.inserted");
+    for (int i = 0; i < 4; ++i) { click(sm, 'a'); }
     settle();
     QVERIFY(sm.isActive("sw_zero"));
     for (int i = 0; i < 10; ++i) {
-        sm.submitEvent("b.down"); sm.submitEvent("b.up");   // start (T-50 / T-52)
+        click(sm, 'b');   // start (T-50 / T-52)
         settle();
         m.advance(15);
-        sm.submitEvent("b.down"); sm.submitEvent("b.up");   // stop (T-51)
+        click(sm, 'b');   // stop (T-51)
         settle();
     }
     QVERIFY(!m.stopwatchRunning());
     QCOMPARE(m.stopwatchCentis(), 15);
+}
+
+void TstModel::settersClampAndWrap()
+{
+    WatchModel m(nullptr);
+    m.setDate(1987, 6, 1);
+    m.setTime(24, 60, 60);                                  // each field one past its range
+    QCOMPARE(m.hour(), 23);
+    QCOMPARE(m.minute(), 59);
+    QCOMPARE(m.second(), 59);
+    m.setTime(-1, -1, -1);
+    QCOMPARE(m.hour() * 3600 + m.minute() * 60 + m.second(), 0);
+    m.setDate(1987, 13, 32);                                // month and day clamped
+    QCOMPARE(m.month(), 12);
+    QCOMPARE(m.day(), 31);
+    m.setDate(1987, 2, 30);
+    QCOMPARE(m.day(), 28);
+    m.setAlarm(1, -1);
+    QCOMPARE(m.t1(), 23 * 60 + 59);
+    m.setAlarm(1, 1440);
+    QCOMPARE(m.t1(), 0);
+    m.setAlarm(2, 1439);
+    QCOMPARE(m.t2(), 1439);
+    QCOMPARE(m.t1(), 0);                                    // the other alarm untouched
+}
+
+void TstModel::jumpBeforeAlarmRollsToTomorrow()
+{
+    WatchModel m(nullptr);
+    m.setDate(1987, 6, 1);
+    m.setTime(8, 0, 0);
+    m.setAlarm(1, 7 * 60 + 15);                             // 07:15 already passed today
+    m.jumpBeforeAlarm(1, 5);
+    QCOMPARE(m.day(), 2);
+    QCOMPARE(m.hour() * 3600 + m.minute() * 60 + m.second(), 7 * 3600 + 14 * 60 + 55);
+    m.setDate(1987, 6, 1);
+    m.setTime(7, 0, 0);                                     // 07:15 still ahead: today
+    m.jumpBeforeAlarm(1, 5);
+    QCOMPARE(m.day(), 1);
+    QCOMPARE(m.hour() * 3600 + m.minute() * 60 + m.second(), 7 * 3600 + 14 * 60 + 55);
+    m.setDate(1987, 6, 1);
+    m.setTime(7, 14, 55);                                   // exactly T1 - 5 s: stays today
+    m.jumpBeforeAlarm(1, 5);
+    QCOMPARE(m.day(), 1);
+}
+
+void TstModel::midnightHits()
+{
+    // Alarm at 00:00 (minute 0, the lower end of the range) and the hour boundary
+    // at midnight, crossed together with the date change.
+    WatchModel m(nullptr);
+    QSignalSpy spy(&m, &WatchModel::hit);
+    m.setAlarm(1, 0);
+    m.setAlarm(2, 23 * 60 + 59);                            // upper end, not crossed here
+    m.setDate(1987, 6, 1);
+    m.setTime(23, 59, 59);
+    m.advance(1000);
+    QStringList hits;
+    for (const auto &args : spy)
+        hits << args.at(0).toString();
+    hits.sort();
+    QCOMPARE(hits, (QStringList{"T.hits.T1", "T.hits.hour"}));
+    QCOMPARE(m.day(), 2);
+    QCOMPARE(m.hour(), 0);
+    spy.clear();
+    m.setTime(23, 58, 59);
+    m.advance(1000);                                        // 23:59: only T2
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toString(), QStringLiteral("T.hits.T2"));
 }
 
 QTEST_GUILESS_MAIN(TstModel)

@@ -3,8 +3,15 @@
 
 Every transition row T-xx in docs/STATECHART-SPEC.md must
   1. appear in statechart/watch.scxml (as <!-- T-xx --> and/or <log label="T-xx"/>),
-  2. be covered by at least one test in tests/*.cpp (a "T-xx" mention in a check),
-and every <transition> in the SCXML must carry a T-xx that exists in the spec.
+  2. be checked by an assertion in tests/*.cpp:
+       - a row with a <log label="T-xx"/> in the SCXML by FIRED(w, "T-xx"), which
+         asserts that the transition actually fired;
+       - a row without one (T-15: no transition; T-56: actions of other rows) by
+         ROW_CHECK("T-xx", cond).
+     Mentions in comments, strings and NOT_FIRED do not count; comments are
+     stripped before scanning.
+and every <transition> in the SCXML (except the default transition of a
+<history>, DESIGN-NOTES D-22) must carry a T-xx that exists in the spec.
 
 Usage: conformance.py [--scxml-only] [--root DIR]
 Exit status 0 when everything is traceable, 1 otherwise.
@@ -17,6 +24,9 @@ import xml.etree.ElementTree as ET
 
 ROW = re.compile(r"^\|\s*(T-\d+)\s*\|", re.M)
 TID = re.compile(r"\bT-\d+\b")
+FIRED = re.compile(r"(?<![A-Za-z_])FIRED\(\s*\w+\s*,\s*\"(T-\d+)\"\s*\)")
+ROW_CHECK = re.compile(r"\bROW_CHECK\(\s*\"(T-\d+)\"\s*,")
+COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 NS = "{http://www.w3.org/2005/07/scxml}"
 
 
@@ -51,9 +61,16 @@ def main():
             src = parent[tr].get("id")
             unlabelled.append(f"{src} --{tr.get('event', '')}--> {tr.get('target', '(none)')}")
 
-    tests = set()
+    logged = {l.get("label") for l in tree.iter(NS + "log") if TID.fullmatch(l.get("label", ""))}
+
+    tests, fired, row_checked = set(), set(), set()
     for f in sorted((root / "tests").glob("*.cpp")):
-        tests |= set(TID.findall(f.read_text(encoding="utf-8")))
+        text = f.read_text(encoding="utf-8")
+        tests |= set(TID.findall(text))
+        code = COMMENTS.sub("", text)
+        fired |= set(FIRED.findall(code))
+        row_checked |= set(ROW_CHECK.findall(code))
+    asserted = {t for t in spec if (t in fired if t in logged else t in row_checked)}
 
     failures = 0
 
@@ -72,7 +89,12 @@ def main():
     report("every T-xx in watch.scxml exists in the spec", sorted(in_scxml - spec, key=key))
     report("every <transition> carries a <log label=\"T-xx\"/> of a spec row", unlabelled)
     if not args.scxml_only:
-        report("every spec row is covered by a test", sorted(spec - tests, key=key))
+        report("every spec row with a <log> is asserted with FIRED(w, \"T-xx\")",
+               sorted((spec & logged) - asserted, key=key))
+        report("every spec row without a <log> is asserted with ROW_CHECK(\"T-xx\", ...)",
+               sorted((spec - logged) - asserted, key=key))
+        report("ROW_CHECK is only used for rows without a <log> (use FIRED otherwise)",
+               sorted(row_checked & logged, key=key))
         report("every T-xx cited in tests exists in the spec", sorted(tests - spec, key=key))
     return 1 if failures else 0
 

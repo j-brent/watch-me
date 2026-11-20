@@ -10,6 +10,14 @@ find_package(Python3 COMPONENTS Interpreter)
 if(Python3_FOUND)
     add_test(NAME conformance
              COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/conformance.py)
+    # Every spec row walked in the built app, through its real input path and event
+    # log; also fails if the committed docs/VERIFICATION.md is not current.
+    add_test(NAME verify
+             COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/verify.py
+                     --check --bin $<TARGET_FILE:watch-me>)
+    set_tests_properties(verify PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600)
+else()
+    message(WARNING "Python 3 not found: the conformance and verify tests are not registered")
 endif()
 
 qt_add_executable(tst_model tst_model.cpp)
@@ -23,3 +31,9 @@ set_target_properties(tst_tree PROPERTIES WIN32_EXECUTABLE FALSE MACOSX_BUNDLE F
 target_link_libraries(tst_tree PRIVATE watchcore Qt6::Test)
 add_test(NAME tst_tree COMMAND tst_tree -o -,txt -o ${CMAKE_CURRENT_BINARY_DIR}/tst_tree.log,txt)
 set_tests_properties(tst_tree PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+qt_add_executable(tst_input tst_input.cpp)
+set_target_properties(tst_input PROPERTIES WIN32_EXECUTABLE FALSE MACOSX_BUNDLE FALSE)
+target_link_libraries(tst_input PRIVATE watchcore Qt6::Test)
+add_test(NAME tst_input COMMAND tst_input -o -,txt -o ${CMAKE_CURRENT_BINARY_DIR}/tst_input.log,txt)
+set_tests_properties(tst_input PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

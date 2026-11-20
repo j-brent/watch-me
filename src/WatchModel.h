@@ -54,11 +54,15 @@ public:
     void setRunning(bool r);
 
     QDateTime now() const { return m_now; }
+    // Sim-panel setters. Out-of-range fields are clamped (hour 0-23, minute and
+    // second 0-59, month 1-12, day 1-length of month); no T.hits.* are emitted.
     Q_INVOKABLE void setTime(int h, int m, int s);
     Q_INVOKABLE void setDate(int y, int mo, int d);
     void setDateTime(const QDateTime &dt);
+    // Alarm time in minutes after midnight, taken modulo 1440 (-1 is 23:59).
     Q_INVOKABLE void setAlarm(int which, int minutesAfterMidnight);
-    // Sim panel: put T a few seconds before alarm 1 or 2.
+    // Sim panel: put T `seconds` before the next occurrence of alarm 1 or 2 (today
+    // if that moment has not passed yet, otherwise tomorrow).
     Q_INVOKABLE void jumpBeforeAlarm(int which, int seconds);
 
     // Advance simulated time by ms (tests and the real-time timer both use this).

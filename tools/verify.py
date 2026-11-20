@@ -3,13 +3,22 @@
 input path (ButtonRouter -> WatchMachine -> TransitionTracer) once per spec row,
 exports the app's own event log, and checks it. Writes docs/VERIFICATION.md.
 
-Usage: tools/verify.py [build-dir]
+Usage: tools/verify.py [--bin APP] [--check] [build-dir]
+  --bin APP   the watch-me executable (default: <build-dir>/watch-me); ctest passes
+              the real target file, which differs on Windows and macOS.
+  --check     do not write docs/VERIFICATION.md; fail if it differs from what this
+              run generates (CI: the committed document must be current).
+Exit status 0 only if every row passes, every spec row is walked, and (--check) the
+document is current. Runs as the ctest `verify`, so CI runs it on every platform.
+
 Each run starts with the battery inserted at 1987-06-01 10:08:30.
 Script steps: 'a' click, '+a'/'-a' hold/release, 'wait:ms', 'set:var:value'
 (datamodel), 'advance:ms' (the statechart's timeout clock), 'clock:ms' (the
 watch's time T), 'alarm:n:HH:MM', 'jump:n:secs', 'settime:H:M:S', or an event name.
 """
+import argparse
 import concurrent.futures as cf
+import difflib
 import os
 import pathlib
 import re
@@ -18,7 +27,7 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-BIN = ROOT / (sys.argv[1] if len(sys.argv) > 1 else "build") / "watch-me"
+BIN = ROOT / "build" / "watch-me"          # replaced from the command line in main()
 
 UPD = "+c;advance:2000;-c"                          # hold c for 2 s: into update.sec
 SW = "a;a;a;a"                                       # time -> stopwatch
@@ -129,9 +138,12 @@ def run(row):
         script = "battery.inserted;wait:150;" + ";".join(
             s + ";wait:120" for s in steps.split(";") if s) + f";wait:200;export:{out}"
         env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
-        subprocess.run([str(BIN), "--time", "1987-06-01T10:08:30", "--manual-time", "--exit", "--grab-delay", "50",
-                        "--script", script], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                       timeout=60)
+        try:
+            subprocess.run([str(BIN), "--time", "1987-06-01T10:08:30", "--manual-time", "--exit",
+                            "--grab-delay", "50", "--script", script], env=env,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+        except subprocess.TimeoutExpired:
+            pass                                  # no log: the row fails below
         text = pathlib.Path(out).read_text(encoding="utf-8") if os.path.exists(out) else ""
     lines = text.splitlines()
     act = next((l[len("# active: "):].split() for l in lines if l.startswith("# active: ")), [])
@@ -150,6 +162,13 @@ def run(row):
 
 
 def main():
+    global BIN
+    ap = argparse.ArgumentParser()
+    ap.add_argument("build_dir", nargs="?", default="build")
+    ap.add_argument("--bin", help="the watch-me executable")
+    ap.add_argument("--check", action="store_true", help="fail if docs/VERIFICATION.md is not current")
+    args = ap.parse_args()
+    BIN = pathlib.Path(args.bin) if args.bin else ROOT / args.build_dir / "watch-me"
     if not BIN.exists():
         sys.exit(f"build the app first: {BIN}")
     with cf.ThreadPoolExecutor(max_workers=4) as ex:
@@ -197,11 +216,23 @@ def main():
            "  paper never enters `out` by default (D-17).",
            "- The unnamed components are named `timedate` (in `regular`) and `nonzero` (in",
            "  `stopwatch`) because SCXML states need ids (D-17).", ""]
-    (ROOT / "docs/VERIFICATION.md").write_text("\n".join(md), encoding="utf-8")
+    doc = ROOT / "docs/VERIFICATION.md"
+    text = "\n".join(md)
+    stale = False
+    if args.check:
+        committed = doc.read_text(encoding="utf-8") if doc.exists() else ""
+        if committed != text:
+            stale = True
+            print("FAIL docs/VERIFICATION.md is not current; run tools/verify.py and commit it:")
+            sys.stdout.writelines(difflib.unified_diff(committed.splitlines(True), text.splitlines(True),
+                                                       "committed", "generated"))
+            print()
+    else:
+        doc.write_text(text, encoding="utf-8")
     print(f"{len(results) - len(fails)}/{len(results)} ok; uncovered: {uncovered}")
     for f in fails:
         print("FAIL", f[0], f[6])
-    return 1 if fails or uncovered else 0
+    return 1 if fails or uncovered or stale else 0
 
 
 if __name__ == "__main__":

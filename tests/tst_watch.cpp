@@ -92,8 +92,14 @@ public:
 
 } // namespace
 
+// `fired` accumulates until Watch::reset(): call reset() before the step whose
+// transition FIRED is meant to check, or an earlier firing satisfies it.
 #define FIRED(w, t) QVERIFY2((w).did(t), "expected " t " to fire")
 #define NOT_FIRED(w, t) QVERIFY2(!(w).did(t), t " must not fire")
+// For a spec row that has no <log> of its own (T-15: no transition; T-56: actions
+// of T-50/T-51/T-52), the assertion that checks it. tests/conformance.py counts
+// FIRED for rows with a log and ROW_CHECK for rows without one; comments don't count.
+#define ROW_CHECK(t, cond) QVERIFY2((cond), t ": " #cond)
 
 class TstWatch : public QObject
 {
@@ -116,12 +122,22 @@ private slots:
     void updateTimeout();
     void dateTimeout();
     void idleRestart();
+    void idleRestartEveryButton_data();
+    void idleRestartEveryButton();
     void alarmDisplays();
     void outTimeout();
     void stopwatch();
     void alarmsBeep();
     void chimeLightBeepTest();
     void harelAnomalyFlagOff();
+
+    // conditions, history and unexpected input (test review, MC-1..MC-10)
+    void alarmConditionsEqualTimes();
+    void displaysRememberOn();
+    void historyForgottenAfterRemoval();
+    void alarmEndConsumesEveryButton_data();
+    void alarmEndConsumesEveryButton();
+    void unexpectedEvents();
 
     // scenario tests required by PLAN.md P3 (+ the paper's own scenario, p. 250)
     void scenarioLightAndExitUpdate();
@@ -198,7 +214,7 @@ void TstWatch::displayCycle()
     QVERIFY(w.in("date"));
     w.reset();
     w.click('a');
-    QVERIFY(w.in("date"));                   // T-15
+    ROW_CHECK("T-15", w.in("date"));
     QVERIFY(w.fired == QStringList{"T-47"}); // only the 2-min timer restart
 
     w.click('d');
@@ -206,14 +222,14 @@ void TstWatch::displayCycle()
     w.down('c');                             // wait
     QVERIFY(w.in("wait"));
     w.click('a');
-    QVERIFY(w.in("wait"));                   // T-15
+    ROW_CHECK("T-15", w.in("wait"));
     w.up('c');
     QVERIFY(w.in("time"));
 
     w.enterUpdate();
     QVERIFY(w.in("update_sec"));
     w.click('a');
-    QVERIFY(w.in("update_sec"));             // T-15
+    ROW_CHECK("T-15", w.in("update_sec"));
     w.click('b');
     QVERIFY(w.in("time"));
 
@@ -221,13 +237,13 @@ void TstWatch::displayCycle()
     w.click('c');                            // alarm1 -> update1
     QVERIFY(w.in("update1_hr"));
     w.click('a');
-    QVERIFY(w.in("update1_hr"));             // T-15
+    ROW_CHECK("T-15", w.in("update1_hr"));
     w.click('b');
     w.click('a');
     w.click('c');
     QVERIFY(w.in("update2_hr"));
     w.click('a');
-    QVERIFY(w.in("update2_hr"));             // T-15
+    ROW_CHECK("T-15", w.in("update2_hr"));
 }
 
 // ------------------------------------------------------ §3.3 time / date / update
@@ -289,11 +305,12 @@ void TstWatch::updateTimeout()
                               "update_date", "update_day", "update_year", "update_mode"})
             if (w.in(b)) before = b;
         QVERIFY(before);
-        w.out.clear();
+        w.reset();                           // FIRED below must see this press, not an earlier one
         w.click('d');
         FIRED(w, "T-27");
         QVERIFY(w.in(before));
         QCOMPARE(w.out, QStringList{QStringLiteral("model.increment:%1").arg(QLatin1String(before))});
+        w.reset();
         w.click('c');
         FIRED(w, "T-26");
         QVERIFY2(w.in(s), s);
@@ -359,28 +376,43 @@ void TstWatch::dateTimeout()
     QCOMPARE(w.t.remaining("date"), -1);
 }
 
+// T-47: any button restarts the 2-min timer (prose p. 247: "on condition that no
+// button has been depressed in the interim"). Every button that keeps the watch in
+// the state is tried: the event list has four entries and each can be wrong.
+void TstWatch::idleRestartEveryButton_data()
+{
+    QTest::addColumn<QString>("where");
+    QTest::addColumn<char>("button");
+    for (const auto &[where, buttons] : {std::pair{"date", "abc"}, std::pair{"out", "bcd"},
+                                         std::pair{"update", "acd"}})
+        for (const char *b = buttons; *b; ++b)
+            QTest::addRow("%s + %c", where, *b) << QString::fromLatin1(where) << *b;
+}
+
+void TstWatch::idleRestartEveryButton()
+{
+    QFETCH(QString, where);
+    QFETCH(char, button);
+    const QByteArray state = where.toLatin1();
+    Watch w;
+    w.alive();
+    if (where == u"date") w.click('d');
+    if (where == u"out") w.click('a');
+    if (where == u"update") w.enterUpdate();
+    QVERIFY(w.in(state));
+    w.advance(100 * kSec);
+    w.reset();
+    w.click(button);
+    FIRED(w, "T-47");
+    QVERIFY(w.in(state));
+    w.advance(2 * kMin - 1);                  // 220 s after entry, just under 2 min after the press
+    QVERIFY(w.in(state));
+    w.advance(1);
+    QVERIFY(w.in("time"));
+}
+
 void TstWatch::idleRestart()
 {
-    // T-47: any button restarts the 2-min timer (prose p. 247: "on condition that no
-    // button has been depressed in the interim").
-    for (const char *where : {"date", "out", "update"}) {
-        Watch w;
-        w.alive();
-        if (qstrcmp(where, "date") == 0) w.click('d');
-        if (qstrcmp(where, "out") == 0) w.click('a');
-        if (qstrcmp(where, "update") == 0) w.enterUpdate();
-        QVERIFY2(w.in(where), where);
-        w.advance(100 * kSec);
-        w.reset();
-        w.click(qstrcmp(where, "out") == 0 ? 'c' : 'a');   // a button that stays in `where`
-        FIRED(w, "T-47");
-        QVERIFY2(w.in(where), where);
-        w.advance(2 * kMin - 1);              // 220 s after entry, just under 2 min after the press
-        QVERIFY2(w.in(where), where);
-        w.advance(1);
-        QVERIFY2(w.in("time"), where);
-    }
-
     // Leaving date cancels its timer, and a timeout from an earlier visit is
     // ignored after re-entry (timer generations).
     Watch w;
@@ -551,7 +583,7 @@ void TstWatch::stopwatch()
     w.down('b');                             // T-50 (+ T-56 beep)
     FIRED(w, "T-50");
     QVERIFY(w.in("sw_nonzero") && w.in("sw_reg") && w.in("sw_on"));
-    QCOMPARE(w.out, (QStringList{"sw.start", "beep.short"}));   // T-56
+    ROW_CHECK("T-56", (w.out == QStringList{"sw.start", "beep.short"}));
     QVERIFY(w.in("light_on"));               // b also lights the display (orthogonal)
     w.up('b');
 
@@ -567,13 +599,13 @@ void TstWatch::stopwatch()
     w.click('b');                            // T-51 (+ T-56)
     FIRED(w, "T-51");
     QVERIFY(w.in("sw_off"));
-    QCOMPARE(w.out, (QStringList{"sw.stop", "beep.short"}));    // T-56
+    ROW_CHECK("T-56", (w.out == QStringList{"sw.stop", "beep.short"}));
 
     w.out.clear();
     w.click('b');                            // T-52 (+ T-56)
     FIRED(w, "T-52");
     QVERIFY(w.in("sw_on"));
-    QCOMPARE(w.out, (QStringList{"sw.start", "beep.short"}));   // T-56
+    ROW_CHECK("T-56", (w.out == QStringList{"sw.start", "beep.short"}));
 
     // d in reg while running -> lap (not zero); lap + stop; d in lap -> reg
     w.click('d');
@@ -706,6 +738,173 @@ void TstWatch::harelAnomalyFlagOff()
     w.down('a');
     NOT_FIRED(w, "T-82");
     QVERIFY(w.in("bt_beep_on") && w.in("date"));
+}
+
+// ------------------------------------- conditions, history, unexpected input
+
+void TstWatch::alarmConditionsEqualTimes()
+{
+    // §3.6 with T1 == T2 and only one alarm enabled: P1/P2 hold through the
+    // "other alarm disabled" term, P does not.
+    {
+        Watch w;                              // alarm 2 alone
+        w.alive();
+        w.setAlarms(420, 420);
+        w.click('a');
+        w.click('a');
+        w.click('d');                         // alarm2 on
+        w.clicks("aaa");                      // chime, stopwatch, time
+        QVERIFY(w.in("time") && w.in("alarm2_enabled") && w.in("alarm1_disabled"));
+        w.reset();
+        w.send("T.hits.T1");                  // alarm 1 disabled: nothing
+        QVERIFY(w.in("time"));
+        QVERIFY(w.fired.isEmpty());
+        w.send("T.hits.T2");                  // T-61 [P2]
+        FIRED(w, "T-61");
+        QVERIFY(w.in("alarm2_beeps"));
+        QCOMPARE(w.fired, QStringList{"T-61"});
+    }
+    {
+        Watch w;                              // alarm 1 alone
+        w.alive();
+        w.setAlarms(420, 420);
+        w.click('a');
+        w.click('d');                         // alarm1 on
+        w.clicks("aaaa");                     // alarm2, chime, stopwatch, time
+        QVERIFY(w.in("time") && w.in("alarm1_enabled") && w.in("alarm2_disabled"));
+        w.reset();
+        w.send("T.hits.T1");                  // T-60 [P1]
+        FIRED(w, "T-60");
+        QVERIFY(w.in("alarm1_beeps"));
+        w.send("T.hits.T2");                  // already beeping: nothing more
+        QVERIFY(w.in("alarm1_beeps"));
+        QCOMPARE(w.fired, QStringList{"T-60"});
+    }
+}
+
+void TstWatch::displaysRememberOn()
+{
+    // T-11/T-12 via H with the remembered value "on" (the default is "off", so only
+    // "on" shows that the history was recorded).
+    Watch w;
+    w.alive();
+    w.click('a');
+    w.click('d');                             // alarm1 on
+    w.click('a');
+    w.click('d');                             // alarm2 on
+    w.click('a');
+    w.click('d');                             // chime on
+    w.clicks("aa");                           // stopwatch, time
+    QVERIFY(w.in("time"));
+    w.click('a');
+    QVERIFY(w.in("alarm1_on"));
+    w.reset();
+    w.click('a');
+    FIRED(w, "T-11");
+    QVERIFY(w.in("alarm2_on"));
+    w.click('a');
+    QVERIFY(w.in("chime_on"));
+}
+
+void TstWatch::historyForgottenAfterRemoval()
+{
+    // T-03 clh(main*) for alarm1 and alarm2: both were "on" before removal, so a
+    // remembered history would bring "on" back.
+    Watch w;
+    w.alive();
+    w.click('a');
+    w.click('d');                             // alarm1 on
+    w.click('a');
+    w.click('d');                             // alarm2 on
+    w.clicks("aaa");                          // chime, stopwatch, time
+    QVERIFY(w.in("time"));
+    w.send("battery.removed");                // T-03
+    FIRED(w, "T-03");
+    w.alive();
+    w.click('a');
+    QVERIFY(w.in("alarm1_off") && w.in("alarm1_disabled"));
+    w.click('a');
+    QVERIFY(w.in("alarm2_off") && w.in("alarm2_disabled"));
+}
+
+// T-63: each of a, b, c, d ends alarms-beep and returns to the display via H*, and
+// the press does nothing else there (no toggle, no field change, no next display).
+// b also switches the light, which is orthogonal (T-72/T-73).
+void TstWatch::alarmEndConsumesEveryButton_data()
+{
+    QTest::addColumn<char>("button");
+    QTest::addColumn<QStringList>("expected");
+    QTest::newRow("a") << 'a' << QStringList{"T-63"};
+    QTest::newRow("b") << 'b' << QStringList{"T-63", "T-72", "T-73"};
+    QTest::newRow("c") << 'c' << QStringList{"T-63"};
+    QTest::newRow("d") << 'd' << QStringList{"T-63"};
+}
+
+void TstWatch::alarmEndConsumesEveryButton()
+{
+    QFETCH(char, button);
+    QFETCH(QStringList, expected);
+    Watch w;
+    w.alive();
+    w.setAlarms(420, 480);
+    w.click('a');
+    w.click('d');                             // alarm1 on + enabled, alarm1 display
+    w.send("T.hits.T1");
+    QVERIFY(w.in("alarm1_beeps"));
+    w.reset();
+    w.click(button);
+    FIRED(w, "T-63");
+    QVERIFY(w.in("alarm1_on") && w.in("alarm1_enabled"));
+    QCOMPARE(w.fired, expected);
+    QVERIFY(w.out.isEmpty());                 // no increment, no stopwatch event
+}
+
+void TstWatch::unexpectedEvents()
+{
+    // dead ignores everything except battery.inserted
+    {
+        Watch w;
+        for (const char *e : {"a.down", "a.up", "b.down", "b.up", "c.down", "c.up", "d.down", "d.up",
+                              "T.hits.T1", "T.hits.T2", "T.hits.hour",
+                              "battery.weakens", "battery.dies", "battery.removed"})
+            w.send(QString::fromLatin1(e));
+        QVERIFY(w.in("dead"));
+        QVERIFY(w.fired.isEmpty());
+        QVERIFY(w.out.isEmpty());
+    }
+    // battery.inserted while alive is not a fresh battery: nothing resets
+    {
+        Watch w;
+        w.alive();
+        w.click('a');
+        w.click('d');                         // alarm1 on + enabled
+        w.reset();
+        w.send("battery.inserted");
+        QVERIFY(w.in("alarm1_on") && w.in("alarm1_enabled"));
+        QVERIFY(w.fired.isEmpty());
+        QVERIFY(w.out.isEmpty());             // in particular no model.reset
+    }
+    // a weak battery does not weaken again
+    {
+        Watch w;
+        w.alive();
+        w.send("battery.weakens");
+        w.reset();
+        w.send("battery.weakens");
+        QVERIFY(w.in("power_blink"));
+        QVERIFY(w.fired.isEmpty());
+    }
+    // releases without presses change nothing
+    {
+        Watch w;
+        w.alive();
+        w.reset();
+        for (char b : {'a', 'b', 'c', 'd'})
+            w.up(b);
+        QVERIFY(w.in("time") && w.in("bt_00") && w.in("light_off"));
+        QVERIFY(w.fired.isEmpty());
+        QVERIFY(w.out.isEmpty());
+    }
 }
 
 // ================================================================== scenarios
@@ -851,7 +1050,9 @@ void TstWatch::scenarioBeepTestFromDate()
 
     // the other order: d first (in time it goes to date and 01), then b
     w.down('d');
-    QVERIFY(w.in("date") && w.in("bt_01"));  // T-20 + T-75
+    FIRED(w, "T-20");
+    FIRED(w, "T-75");
+    QVERIFY(w.in("date") && w.in("bt_01"));
     w.down('b');                             // T-77
     FIRED(w, "T-77");
     QVERIFY(w.in("bt_beep") && w.in("date"));
