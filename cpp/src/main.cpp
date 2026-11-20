@@ -127,6 +127,8 @@ int main(int argc, char *argv[])
 
         QObject::connect(engine.get(), &QQmlApplicationEngine::objectCreationFailed, &app,
                          [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
+        // Main.qml by module URI and type name, wherever the module's resource prefix is.
+        // https://doc.qt.io/qt-6/qqmlapplicationengine.html#loadFromModule
         engine->loadFromModule(QStringLiteral("WatchMe"), QStringLiteral("Main"));
 
         if (cli.isSet(winSize)) {

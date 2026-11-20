@@ -298,7 +298,8 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
     so a cached value is the one the condition saw (as before, D-18).
   - The `host.*` transitions are plumbing, not spec rows: they carry no T-xx or
     `<log>`, `conformance.py` exempts them and `ScxmlTreeModel` leaves them out
-    of the chart. Behaviour is unchanged: `docs/VERIFICATION.md` is identical.
+    of the chart. Only a transition whose events are *all* `host.*` is exempt, so
+    a spec row cannot hide behind a `host.` event in a mixed event list. Behaviour is unchanged: `docs/VERIFICATION.md` is identical.
   The only datamodel access left is in tests (inspection) and `main.cpp`'s check
   that the ECMAScript datamodel plugin is installed.
 - **D-25 Several hosts, one statechart and one UI.** The repository holds one
@@ -317,6 +318,17 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
   `qt_standard_project_setup(REQUIRES 6.8)` opts into Qt 6.8's policies; the QML
   module now lives under `qrc:/qt/qml/WatchMe/`, so `main.cpp` loads it with
   `loadFromModule("WatchMe", "Main")` instead of a resource path.
+- **D-26 The tracer keeps distinct configurations only.** `TransitionTracer`
+  finds a fired row's source in its last 4 stable configurations, because Qt
+  delivers `log` after the macrostep (D-18). Every outgoing event the statechart
+  sends to its own queue (`timer.*`, `model.*`, `sw.*`, and since D-24
+  `host.data`: one per display exit, two on T-02/T-03) is a macrostep of its own
+  that ends in the same configuration. Counting those as separate entries could
+  push the configuration that held the source out of the window. With Qt 6.8.3
+  this was not observed (T-03 from a running stopwatch logs `alive → dead` with
+  or without this change), so it is a precaution, not a bug fix. A configuration
+  equal to the newest one kept is not added again; nothing is lost, since the
+  list only answers "was this state active recently".
 
 ## 3. Open deviations from the paper (summary)
 

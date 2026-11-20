@@ -54,7 +54,8 @@ def main():
     unlabelled = []
     parent = {c: p for p in tree.iter() for c in p}
     for tr in tree.iter(NS + "transition"):
-        if parent[tr].tag == NS + "history" or tr.get("event", "").startswith("host."):
+        events = tr.get("event", "").split()
+        if parent[tr].tag == NS + "history" or (events and all(e.startswith("host.") for e in events)):
             continue
         labels = [l.get("label", "") for l in tr.iter(NS + "log")]
         ok = [l for l in labels if TID.fullmatch(l) and l in spec]

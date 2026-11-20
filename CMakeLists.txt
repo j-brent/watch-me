@@ -16,6 +16,10 @@ option(WATCHME_DEPLOY "Deploy the Qt runtime on install (for release packages)" 
 # Qt 6.8 LTS or newer (DESIGN-NOTES D-1).
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Qml Quick Scxml Test)
 find_package(Qt6 6.8 QUIET COMPONENTS Multimedia)
+# REQUIRES 6.8 opts into every Qt policy up to 6.8, e.g. QTP0001 (QML modules
+# under qrc:/qt/qml/, hence loadFromModule in main.cpp; DESIGN-NOTES D-25).
+# https://doc.qt.io/qt-6/qt-standard-project-setup.html
+# https://doc.qt.io/qt-6/qt-cmake-policy-qtp0001.html
 qt_standard_project_setup(REQUIRES 6.8)
 
 # ---------------------------------------------------------------------------
@@ -39,6 +43,7 @@ qt_add_statecharts(watchcore shared/statechart/watch.scxml)
 # The SCXML (for the live view), layout hints and the spec (for confidence badges)
 # are embedded so the view is generated from the same document that was compiled.
 # Keep the resource paths short and host-independent (":/statechart/watch.scxml").
+# https://doc.qt.io/qt-6/cmake-source-file-property-qt-resource-alias.html
 set_source_files_properties(shared/statechart/watch.scxml PROPERTIES QT_RESOURCE_ALIAS statechart/watch.scxml)
 set_source_files_properties(shared/statechart/layout.json PROPERTIES QT_RESOURCE_ALIAS statechart/layout.json)
 qt_add_resources(watchcore "watchdata"

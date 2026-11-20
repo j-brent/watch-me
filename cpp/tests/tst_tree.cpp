@@ -15,6 +15,7 @@ private slots:
     void initTestCase() { QLoggingCategory::setFilterRules(QStringLiteral("scxml.statemachine.debug=false")); }
     void structure();
     void tracerLog();
+    void hostBoundary();
     void specTags();
 };
 
@@ -72,6 +73,32 @@ void TstTree::tracerLog()
     QVERIFY(tr.firedSpecIds().contains("T-14"));
     tr.noteInput("x");
     QCOMPARE(tr.entries().last(), QStringLiteral("▶ x"));
+    // T-03 from inside a display: the exit sends host.data twice and more outgoing
+    // events; the source must still resolve to "alive" (DESIGN-NOTES D-26).
+    m.submitEvent("battery.removed");
+    settle();
+    QVERIFY(tr.isActive("dead"));
+    QVERIFY(tr.entries().contains(QStringLiteral("T-03 battery.removed: alive → dead")));
+}
+
+void TstTree::hostBoundary()
+{
+    // Only transitions whose events are all host.* are plumbing (D-24); a mixed
+    // event list is a user transition and stays in the chart.
+    const QByteArray xml =
+        "<scxml xmlns='http://www.w3.org/2005/07/scxml' version='1.0' initial='s'>"
+        "  <state id='s'>"
+        "    <transition event='host.alarms'/>"
+        "    <transition event='host.alarms host.anomalies'/>"
+        "    <transition event='host.alarms a.down' target='u'><log label='T-10' expr='_event.name'/></transition>"
+        "  </state>"
+        "  <state id='u'/>"
+        "</scxml>";
+    ScxmlTreeModel t;
+    QVERIFY(t.loadData(xml));
+    QCOMPARE(t.transitionsFrom("s").size(), 1);
+    QCOMPARE(t.transitionsFrom("s").first().toMap().value("event").toString(),
+             QStringLiteral("host.alarms a.down"));
 }
 
 void TstTree::specTags()
