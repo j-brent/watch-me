@@ -124,7 +124,11 @@ void TransitionTracer::onStable()
     for (const auto &s : names)
         m_activeMap.insert(s, true);
     m_prevActive = now;
-    m_recent.prepend(now);
+    // Only distinct configurations: a macrostep that changes no state (host.data,
+    // timer.*, model.*, ...) would otherwise push the configuration a late log
+    // line needs out of the window (DESIGN-NOTES D-26).
+    if (m_recent.isEmpty() || m_recent.first() != now)
+        m_recent.prepend(now);
     while (m_recent.size() > 4)
         m_recent.removeLast();
     emit activeChanged();
