@@ -1,0 +1,14 @@
+{
+  "name": "watch-me-qmlts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "watch-me host in TypeScript: glue logic compiled to ES modules for Qt Quick + Qt SCXML",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf build"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
