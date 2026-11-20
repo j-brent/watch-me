@@ -1,0 +1,155 @@
+# Build, test and package watch-me on Ubuntu, Windows and macOS.
+#
+# Runs on every push to main and every pull request. release.yml calls this same
+# workflow (workflow_call), so a release ships exactly the packages that were
+# built and tested here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version string used in package names (e.g. v1.2.0)"
+        type: string
+        required: false
+        default: ""
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  QT_VERSION: "6.8.3"          # Qt 6.8 LTS: the project requires 6.8
+  # Safety net only: no CI step needs a display. The Qt Test suites are GUI-less,
+  # verify runs the app with --no-gui, and the smoke test unsets this variable to
+  # run the packaged app on the platform's real display plugin.
+  QT_QPA_PLATFORM: offscreen
+  CTEST_OUTPUT_ON_FAILURE: "1"
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu
+            os: ubuntu-24.04
+            package: watch-me-linux-x86_64.tar.gz
+          - name: Windows
+            os: windows-2022
+            package: watch-me-windows-x64.zip
+          - name: macOS
+            os: macos-15
+            package: watch-me-macos.dmg
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ninja
+        run: python -m pip install ninja
+
+      - name: Install Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-dev libegl1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libfontconfig1 libdbus-1-3 libpulse0 \
+            xvfb xauth
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          modules: qtscxml qtmultimedia
+          cache: true
+
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DWATCHME_DEPLOY=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --timeout 300
+
+      - name: Show test logs
+        # Qt Test also writes each suite's results to build/tests/<suite>.log
+        if: failure()
+        run: for f in build/tests/*.log; do echo "::group::$f"; cat "$f"; echo "::endgroup::"; done
+
+      - name: Install and deploy the Qt runtime
+        # Qt's deploy support needs an absolute prefix
+        run: cmake --install build --prefix "$PWD/dist"
+
+      - name: Smoke-test the packaged app
+        # Starts the *deployed* app with the platform plugin it ships (cocoa, windows,
+        # xcb under a virtual X server), inserts the battery, walks the display cycle
+        # and saves a screenshot: fails if any Qt library, plugin or QML module is
+        # missing from the package.
+        run: |
+          wrap=()
+          case "${{ runner.os }}" in
+            Linux)   app=dist/bin/watch-me; wrap=(xvfb-run -a -s "-screen 0 1920x1080x24") ;;
+            Windows) app=dist/bin/watch-me.exe ;;
+            macOS)   app=dist/watch-me.app/Contents/MacOS/watch-me ;;
+          esac
+          # Use only what was deployed: install-qt-action points these variables at
+          # the Qt installation, which would load a second copy of Qt's libraries
+          # (crash on macOS) and hide anything missing from the package.
+          "${wrap[@]}" env -u QT_QPA_PLATFORM -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
+              -u QML_IMPORT_PATH -u LD_LIBRARY_PATH -u QT_ROOT_DIR -u Qt6_DIR \
+              "$app" --script "battery.inserted;a;a;a;a;b" --grab smoke.png
+          test -s smoke.png
+
+      - name: Package
+        run: |
+          name="${{ matrix.package }}"
+          if [ -n "${{ inputs.version }}" ]; then name="${name/watch-me-/watch-me-${{ inputs.version }}-}"; fi
+          case "${{ runner.os }}" in
+            Linux)
+              mv dist "watch-me"
+              tar -czf "$name" watch-me ;;
+            Windows)
+              mv dist "watch-me"
+              7z a -tzip "$name" watch-me > /dev/null ;;
+            macOS)
+              # ad-hoc signature (deployment rewrote the bundle); not notarized
+              codesign --force --deep --sign - dist/watch-me.app
+              hdiutil create -volname watch-me -srcfolder dist/watch-me.app -ov -format UDZO "$name" ;;
+          esac
+          echo "PACKAGE=$name" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ runner.os }}
+          path: ${{ env.PACKAGE }}
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-screenshot-${{ runner.os }}
+          path: smoke.png
+          if-no-files-found: ignore
