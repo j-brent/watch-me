@@ -13,3 +13,8 @@ qt_add_executable(tst_model tst_model.cpp)
 target_link_libraries(tst_model PRIVATE watchcore Qt6::Test)
 add_test(NAME tst_model COMMAND tst_model)
 set_tests_properties(tst_model PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+qt_add_executable(tst_tree tst_tree.cpp)
+target_link_libraries(tst_tree PRIVATE watchcore Qt6::Test)
+add_test(NAME tst_tree COMMAND tst_tree)
+set_tests_properties(tst_tree PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

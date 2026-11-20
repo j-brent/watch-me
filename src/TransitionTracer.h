@@ -4,7 +4,8 @@
 //  - the states touched by the last macrostep (for the ~600 ms flash),
 //  - an event log "T-xx a.down: time → alarm1".
 // Every transition in watch.scxml carries <log label="T-xx" expr="_event.name"/>,
-// so QScxmlStateMachine::log tells us exactly which spec row fired.
+// so QScxmlStateMachine::log tells us exactly which spec row fired. (Qt 6.4 emits
+// the log signal after the macrostep; see onLog for how the source is resolved.)
 #include <QObject>
 #include <QSet>
 #include <QStringList>
@@ -57,6 +58,7 @@ private:
     QScxmlStateMachine *m_machine;
     ScxmlTreeModel *m_tree;
     QSet<QString> m_active, m_prevActive, m_pendingFlash;
+    QList<QSet<QString>> m_recent;   // last stable configurations, newest first
     QStringList m_activeList;
     QVariantMap m_activeMap, m_flashMap;
     QStringList m_entries;

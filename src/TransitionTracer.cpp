@@ -1,6 +1,8 @@
 #include "TransitionTracer.h"
 #include "ScxmlTreeModel.h"
 #include <QScxmlStateMachine>
+#include <QScxmlDataModel>
+#include <QJSValue>
 #include <QFile>
 #include <QCollator>
 #include <QRegularExpression>
@@ -32,20 +34,55 @@ void TransitionTracer::onLog(const QString &label, const QString &msg)
     static const QRegularExpression re(QStringLiteral("^T-\\d+$"));
     if (!re.match(label).hasMatch())
         return;
-    // Find which transition carrying this spec id fired: the one whose source is in
-    // the configuration that was stable before this macrostep (or is being entered
-    // in it, for eventless/onentry chains).
+    // Qt 6.4 delivers QScxmlStateMachine::log after the macrostep (after
+    // reachedStableState). So: the source must have been active in one of the last
+    // few stable configurations, and the target must be active now (for a history
+    // pseudostate: its parent).
     QString source;
     QStringList targets;
     if (m_tree) {
-        const auto &all = m_tree->transitions();
-        const ScxmlTransition *best = nullptr;
-        for (const auto &t : all) {
-            if (t.specId != label)
-                continue;
-            if (!best)
-                best = &t;
-            if (m_prevActive.contains(t.source)) { best = &t; break; }
+        auto wasActive = [&](const QString &id) {
+            for (const auto &c : m_recent)
+                if (c.contains(id))
+                    return true;
+            return false;
+        };
+        auto landed = [&](const ScxmlTransition &t) {
+            for (const auto &tg : t.targets) {
+                const auto n = m_tree->nodes().value(tg);
+                const QString where = n.kind == u"history" ? n.parent : tg;
+                if (!m_active.contains(where))
+                    return false;
+            }
+            return true;
+        };
+        QList<const ScxmlTransition *> cands;
+        for (const auto &t : m_tree->transitions())
+            if (t.specId == label && wasActive(t.source) && landed(t))
+                cands << &t;
+        if (cands.isEmpty())
+            for (const auto &t : m_tree->transitions())
+                if (t.specId == label && wasActive(t.source))
+                    cands << &t;
+        const ScxmlTransition *best = cands.value(0);
+        if (cands.size() > 1) {
+            // Same row, same source: the clh(main*) pairs "[hv_x] -> x_H" / "-> x".
+            // hv_x is only changed when x is exited, so it still tells which branch fired.
+            static const QRegularExpression ident(QStringLiteral("^[A-Za-z_][A-Za-z0-9_]*$"));
+            const ScxmlTransition *uncond = nullptr, *taken = nullptr;
+            for (const auto *t : cands) {
+                if (t->cond.isEmpty()) {
+                    uncond = t;
+                } else if (ident.match(t->cond).hasMatch() && m_machine->dataModel()) {
+                    // the ecmascript datamodel hands out QJSValue-wrapped variants
+                    QVariant v = m_machine->dataModel()->scxmlProperty(t->cond);
+                    if (v.metaType() == QMetaType::fromType<QJSValue>())
+                        v = v.value<QJSValue>().toVariant();
+                    if (v.toBool())
+                        taken = t;
+                }
+            }
+            best = taken ? taken : (uncond ? uncond : best);
         }
         if (best) {
             source = best->source;
@@ -54,10 +91,12 @@ void TransitionTracer::onLog(const QString &label, const QString &msg)
     }
     m_fired.insert(label);
     m_lastSpecId = label;
+    const auto stamp = m_clock.elapsed();
     if (!source.isEmpty())
-        m_pendingFlash.insert(source);
+        m_flashMap.insert(source, stamp);
     for (const auto &t : targets)
-        m_pendingFlash.insert(t);
+        m_flashMap.insert(t, stamp);
+    emit flashChanged();
     const QString to = targets.isEmpty() ? QStringLiteral("(no state change)") : targets.join(QLatin1String(", "));
     append(QStringLiteral("%1 %2: %3 → %4").arg(label, msg.isEmpty() ? QStringLiteral("·") : msg, source, to));
     emit transitionFired(label, msg, source, targets);
@@ -77,6 +116,9 @@ void TransitionTracer::onStable()
     for (const auto &s : names)
         m_activeMap.insert(s, true);
     m_prevActive = now;
+    m_recent.prepend(now);
+    while (m_recent.size() > 4)
+        m_recent.removeLast();
     emit activeChanged();
     if (!m_pendingFlash.isEmpty()) {
         m_flashMap.clear();

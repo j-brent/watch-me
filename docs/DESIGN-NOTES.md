@@ -167,3 +167,19 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
   (T-56) and a looping two-tone beep (alarms-beep, chime.beep, beep-test beep.on)
   with `QSoundEffect` when Qt Multimedia is available at build time. The visual
   "BEEP" indicator on the LCD is always shown.
+- **D-17 Statechart view.** Generated at run time from the embedded
+  `watch.scxml` (`ScxmlTreeModel`). `layout.json` only gives `rows`/`columns` per
+  state; region order is the document order. Labels drop the parent prefix
+  (`update_sec` is shown as `sec` inside `update`); hovering or clicking shows the
+  full transitions with their T-xx. The unnamed AND-state inside `stopwatch` is
+  `sw_nonzero` (drawn as "nonzero"), and the unnamed XOR component of `regular`
+  is `timedate`. The default arrow (●→) on `out`'s first child comes from SCXML
+  needing an initial child; the paper never enters `out` by default.
+- **D-18 Event-log attribution.** Qt 6.4 emits `QScxmlStateMachine::log` *after*
+  the macrostep (after `reachedStableState`). `TransitionTracer` therefore
+  resolves each `T-xx` log to a transition whose source was active in one of the
+  last four stable configurations and whose target is active now. For the
+  clh(main\*) pairs it reads the `hv_*` flag to tell the history branch from the
+  default branch. This is exact for interactive use (one button event per
+  macrostep). A burst of many queued events can mis-attribute the source/target
+  text of a line; the T-xx itself is always exact.

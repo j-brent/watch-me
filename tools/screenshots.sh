@@ -32,3 +32,12 @@ shot watch-stopwatch $W 700 "battery.inserted;a;a;a;a;b;wait:1500;d"
 shot watch-beeping   $W 100 "battery.inserted;alarm:1:10:30;a;d;a;a;a;a;jump:1:1;wait:1300"
 shot watch-beeptest  $W 200 "battery.inserted;+d;+b;wait:200"
 echo "screenshots written to $OUT"
+
+# full window, 1920x1080: the statechart view with an active configuration
+full() {  # name delay script
+    "$BIN" --time "$T0" --size 1920x1080 --grab-delay "$2" --script "$3" --grab "$OUT/$1.png" 2>/dev/null
+}
+full app-stopwatch-lap 250 "battery.inserted;wait:150;a;wait:150;d;wait:150;a;wait:150;a;wait:150;a;wait:150;b;wait:900;d;wait:300;+b"
+full app-beeptest      250 "battery.inserted;wait:150;+d;wait:150;+b"
+full app-transitions   400 "battery.inserted;wait:150;+c;wait:2200;-c;wait:100;c;wait:100;c;wait:100;c;wait:100;c;select:update"
+echo "full-window screenshots written to $OUT"

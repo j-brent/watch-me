@@ -37,7 +37,12 @@ ApplicationWindow {
                     onClicked: buttons.submit(tracer.activeSet["dead"] ? "battery.inserted" : "battery.removed")
                 }
             }
-            Item { Layout.fillHeight: true }
+            Legend { Layout.fillWidth: true }
+            EventLog {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumHeight: 120
+            }
         }
         StatechartView {
             Layout.fillWidth: true

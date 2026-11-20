@@ -1,7 +1,73 @@
 {
-  "_comment": "View hints only (PLAN §3). Button placement follows Fig. 7 of Harel 1987.",
-  "buttons": { "a": "left-top", "b": "right-top", "c": "right-middle", "d": "right-bottom" },
-  "regionOrder": ["main", "alarm1_status", "alarm2_status", "chime_status", "light", "power"],
+  "_comment": "View hints only (PLAN section 3). Button placement follows Fig. 7 of Harel 1987.",
+  "buttons": {
+    "a": "left-top",
+    "b": "right-top",
+    "c": "right-middle",
+    "d": "right-bottom"
+  },
+  "regionOrder": [
+    "main",
+    "alarm1_status",
+    "alarm2_status",
+    "chime_status",
+    "light",
+    "power"
+  ],
   "collapsed": [],
-  "horizontal": ["alive", "displays", "timedate", "out", "regular", "sw_nonzero", "main", "watch"]
+  "columns": {
+    "watch": 2,
+    "alive": 6,
+    "main": 2,
+    "displays": 2,
+    "regular": 2,
+    "timedate": 3,
+    "update": 3,
+    "beep_test": 2,
+    "bt_beep": 2,
+    "out": 5,
+    "alarm1": 1,
+    "alarm2": 1,
+    "update1": 1,
+    "update2": 1,
+    "chime": 1,
+    "stopwatch": 1,
+    "sw_nonzero": 2,
+    "sw_display": 1,
+    "sw_run": 1,
+    "alarms_beep": 1,
+    "alarm1_status": 1,
+    "alarm2_status": 1,
+    "chime_status": 1,
+    "chime_enabled": 1,
+    "light": 1,
+    "power": 1
+  },
+  "_columns": "children per row inside each state (statechart view)",
+  "_collapsed": "state ids drawn collapsed at start-up (double-click a state to toggle)",
+  "rows": {
+    "alive": [
+      [
+        "main"
+      ],
+      [
+        "alarm1_status",
+        "alarm2_status",
+        "chime_status",
+        "light",
+        "power"
+      ]
+    ],
+    "displays": [
+      [
+        "regular",
+        "wait"
+      ],
+      [
+        "out",
+        "stopwatch"
+      ]
+    ]
+  },
+  "_rows": "explicit rows of children (overrides columns); used for the AND-components of alive"
 }

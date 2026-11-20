@@ -17,6 +17,7 @@ add_library(watchcore STATIC
     src/ButtonRouter.h src/ButtonRouter.cpp
     src/ScxmlTreeModel.h src/ScxmlTreeModel.cpp
     src/TransitionTracer.h src/TransitionTracer.cpp
+    src/SpecTags.h src/SpecTags.cpp
 )
 target_include_directories(watchcore PUBLIC src ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(watchcore PUBLIC Qt6::Core Qt6::Gui Qt6::Qml Qt6::Scxml)
@@ -48,6 +49,9 @@ qt_add_qml_module(watch-me
         qml/WatchButton.qml
         qml/StatechartView.qml
         qml/StateBox.qml
+        qml/TransitionOverlay.qml
+        qml/Legend.qml
+        qml/EventLog.qml
 )
 target_link_libraries(watch-me PRIVATE watchcore Qt6::Quick)
 if(TARGET Qt6::Multimedia)

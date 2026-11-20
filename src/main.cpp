@@ -16,6 +16,7 @@
 #include "ButtonRouter.h"
 #include "WatchModel.h"
 #include "Beeper.h"
+#include "SpecTags.h"
 
 int main(int argc, char *argv[])
 {
@@ -40,6 +41,9 @@ int main(int argc, char *argv[])
         QStringLiteral("Clock value set when the battery is inserted (ISO 8601, e.g. 1987-06-01T10:08:30)."),
         QStringLiteral("datetime"));
     cli.addOption(startTime);
+    QCommandLineOption winSize(QStringLiteral("size"), QStringLiteral("Window size, e.g. 1920x1080."),
+                               QStringLiteral("WxH"));
+    cli.addOption(winSize);
     cli.addOption(script);
     cli.addOption(grab);
     cli.addOption(grabDelay);
@@ -48,6 +52,8 @@ int main(int argc, char *argv[])
     WatchMachine machine;
     ScxmlTreeModel tree;
     tree.load(QStringLiteral(":/statechart/watch.scxml"));
+    SpecTags specTags;
+    specTags.load(QStringLiteral(":/docs/STATECHART-SPEC.md"));
     TransitionTracer tracer(&machine, &tree);
     WatchModel watch(&machine);
     watch.setRunning(true);
@@ -66,6 +72,7 @@ int main(int argc, char *argv[])
     ctx->setContextProperty(QStringLiteral("buttons"), &buttons);
     ctx->setContextProperty(QStringLiteral("watch"), &watch);
     ctx->setContextProperty(QStringLiteral("beeper"), &beeper);
+    ctx->setContextProperty(QStringLiteral("specTags"), &specTags);
     QVariantMap layout;
     {
         QFile lf(QStringLiteral(":/statechart/layout.json"));
@@ -78,6 +85,11 @@ int main(int argc, char *argv[])
                      [] { QCoreApplication::exit(1); }, Qt::QueuedConnection);
     engine.load(QUrl(QStringLiteral("qrc:/WatchMe/qml/Main.qml")));
 
+    if (cli.isSet(winSize)) {
+        const QStringList wh = cli.value(winSize).split(QLatin1Char('x'));
+        if (auto *w = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0)); w && wh.size() == 2)
+            w->resize(wh[0].toInt(), wh[1].toInt());
+    }
     machine.start();
     if (cli.isSet(autoInsert))
         QTimer::singleShot(0, &buttons, [&] { buttons.submit(QStringLiteral("battery.inserted")); });
@@ -111,6 +123,10 @@ int main(int argc, char *argv[])
             watch.setTime(parts[1].toInt(), parts[2].toInt(), parts[3].toInt());
         } else if (parts.first() == u"speed" && parts.size() == 2) {
             watch.setSpeed(parts[1].toDouble());
+        } else if (parts.first() == u"select" && parts.size() == 2) {       // select:time (statechart view)
+            if (auto *root = engine.rootObjects().value(0))
+                if (auto *v = root->findChild<QObject *>(QStringLiteral("statechartView")))
+                    v->setProperty("selected", parts[1]);
         } else if (parts.first() == u"set" && parts.size() == 3) {          // set:harelAnomalies:false
             const QVariant v = parts[2] == u"true" ? QVariant(true)
                              : parts[2] == u"false" ? QVariant(false) : QVariant(parts[2].toDouble());
