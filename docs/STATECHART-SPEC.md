@@ -113,13 +113,14 @@ SCXML IDs are global, so they use underscores and full paths:
 | T-03 | alive | battery.removed / clh(main*) | dead | [P] Fig. 28/31 |
 | T-04 | power.OK | battery.weakens | power.blink | [P] Fig. 28/31 |
 
-**clh(main\*)** — SCXML has no clear-history action. It is emulated with a datamodel
-object `hv` ("history valid"): T-02/T-03 execute `hv = {}`; every state that owns an
-H/H\* sets `hv.<state> = true` on exit; and every transition that enters through an
-H whose value might pre-date the last `dead` is split into a `[hv.x]` branch targeting
-the history pseudostate and a fallback branch targeting the state's default. The
-observable behaviour equals Harel's "history is forgotten if dead has been entered in
-the meantime" (p. 247). Initial state of `watch`: `dead` [P] (Fig. 26 default arrow).
+**clh(main\*)** — SCXML has no clear-history action. It is emulated with datamodel
+booleans `hv_alarm1`, `hv_alarm2`, `hv_chime`, `hv_stopwatch` ("history valid"):
+T-02/T-03 set all of them to `false`; each state that owns an H/H\* sets its flag to
+`true` on exit; and every transition that enters through an H whose value might
+pre-date the last `dead` is split into a `[hv_x]` branch targeting the history
+pseudostate and a fallback branch targeting the state's default. The observable
+behaviour equals Harel's "history is forgotten if dead has been entered in the
+meantime" (p. 247). Initial state of `watch`: `dead` [P] (Fig. 26 default arrow).
 The UI starts with an "Insert battery" action; there is also a `--auto-insert` flag.
 
 ### 3.2 Display cycle (button a)
@@ -221,7 +222,7 @@ the machine is already in alarms-beep when the second event arrives.
 | T-79 | beep-test.01 | d.up | 00 | [P] |
 | T-80 | beep-test.beep | d.up | 10 | [P] |
 | T-81 | beep-test.beep | b.up | 01 | [P] |
-| T-82 | beep.on | a.down [harelAnomalies] | beep.off | [P] Fig. 32 |
+| T-82 | beep.on | a.down [harelAnomalies && !In('time')] | beep.off | [P] Fig. 32 (`!In('time')`: see note) |
 | T-83 | beep.off | a.up | beep.on | [P] Fig. 32 |
 
 Beep-test is an orthogonal component of `regular`, so it is active exactly in
@@ -235,7 +236,11 @@ by one, beep-test in `beep`, light on. Both are required tests.
 
 Fig. 32 (pressing `a` silences the beep until `a.up`) is not part of Fig. 31; it is
 modelled as `beep.on | beep.off` behind the datamodel flag `harelAnomalies`
-(default `true`). With the flag off, T-82 never fires.
+(default `true`). With the flag off, T-82 never fires. In `time`, `a` also triggers
+T-10, which leaves `regular`; T-10 must win (W3C SCXML picks the transition of the
+earlier atomic state in document order, Statemate gives priority to the outer
+scope — both select T-10). Qt 6.4 resolves this conflict the other way, so T-82
+carries the explicit guard `!In('time')`, which encodes the same priority.
 
 ## 4. What each state shows on the LCD [A] (visual only)
 

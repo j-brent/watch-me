@@ -112,7 +112,7 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
   predates Step 0). Consequence, same as in the paper: if b is already held when
   `regular` is entered, beep-test starts in 00 (Harel: "assuming, for simplicity,
   that b and d cannot be depressed simultaneously" — p. 249).
-- **D-6 Stopwatch counter.** Driven by `qt:signal` events on transitions
+- **D-6 Stopwatch counter.** Driven by outgoing events on transitions
   (`sw.start` on T-50/T-52, `sw.stop` on T-51, `sw.reset` on T-55, `sw.lap` on T-53)
   rather than by `run.on` being active, because `run.on` is not active while
   another display is shown, but the stopwatch keeps counting.
@@ -125,3 +125,29 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
 - **D-9 Timeouts and simulation speed.** SCXML delays scale with `timeScale`
   (tests: 0.001). The sim panel's clock-speed slider affects only the simulated
   clock (T, alarms, chime), not the user-interaction timeouts.
+- **D-10 "Beep-test from date" scenario (PLAN P3).** The plan expected
+  "beep-test from date, release d → date". In Fig. 31 `d` in `date` goes to `time`
+  unconditionally (T-21), so pressing b then d in date ends in time with the beeper
+  on, and releasing d keeps time. Pressing d first in *time* (→ date, beep-test 01)
+  and then b keeps the watch in date with the beeper on. The test checks the
+  paper's behaviour for both orders.
+- **D-11 Outgoing events.** PLAN §3 proposed `<send type="qt:signal">`. Qt 6.4's
+  SCXML runtime rejects that type ("qt:signal is not a valid type",
+  error.execution). Outgoing events are therefore plain `<send event="…">`s to
+  the machine's own external queue; `QScxmlStateMachine::connectToEvent` observes
+  them, including their `<param>` data. They are processed afterwards as no-op
+  events (no transition listens to `model.*`, `sw.*`, `beep.*`). They are
+  asynchronous: C++ sees them on the next event-loop turn, in order. Outgoing
+  events: `model.reset` (entry of alive), `model.increment {field}` (T-27, T-33,
+  T-38), `sw.start` (T-50, T-52), `sw.stop` (T-51), `sw.lap` (T-53),
+  `sw.reset` (T-55), `beep.short` (T-56).
+- **D-12 Transition priority in Qt 6.4.** With the beeper on in `time`, `a.down`
+  enables T-10 (time → alarm1, leaves regular) and T-82 (beep.on → off). Both the
+  W3C algorithm (document order) and Harel/Statemate (outer scope first) choose
+  T-10; Qt 6.4 chose T-82. T-82's condition carries `!In('time')`, so the model
+  behaves as specified on any conforming engine. No other button event enables two
+  conflicting transitions (checked: all other simultaneous transitions are in
+  orthogonal components or targetless).
+- **D-13 SCXML errors are test failures.** `tst_watch` installs a message
+  handler on `qt.scxml.statemachine` and fails any test during which the engine
+  reported `error.execution` (Qt reports those only as debug output).

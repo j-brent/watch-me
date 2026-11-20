@@ -5,11 +5,14 @@
 
   Single source of truth for behaviour: docs/STATECHART-SPEC.md. Every transition
   carries a <!- - T-xx - -> comment and a <log label="T-xx"/> naming its spec row.
-  C++ only receives the qt:signal sends below (model.*, sw.*, beep.short) and only
+  C++ only observes the outgoing sends below (model.*, sw.*, beep.short) and only
   submits buttons, battery events and "T hits" events.
 
   SCXML reference: https://www.w3.org/TR/scxml/
-  qt:signal sends: https://doc.qt.io/qt-6/qtscxml-instantiating-state-machines.html
+  Outgoing events (model.*, sw.*, beep.short) are plain <send>s to the machine's own
+  external queue, observed in C++ with QScxmlStateMachine::connectToEvent
+  (https://doc.qt.io/qt-6/qscxmlstatemachine.html#connectToEvent). Qt 6.4 rejects
+  type="qt:signal" (DESIGN-NOTES D-11).
 -->
 <scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0"
        name="WatchMachine" datamodel="ecmascript" initial="watch">
@@ -23,7 +26,10 @@
     <data id="T1" expr="720"/>
     <data id="T2" expr="720"/>
     <!-- "History valid" flags: emulation of clh(main*) (spec §3.1, DESIGN-NOTES D-2). -->
-    <data id="hv" expr="({})"/>
+    <data id="hv_alarm1" expr="false"/>
+    <data id="hv_alarm2" expr="false"/>
+    <data id="hv_chime" expr="false"/>
+    <data id="hv_stopwatch" expr="false"/>
   </datamodel>
 
   <script>
@@ -45,12 +51,16 @@
     <parallel id="alive">
       <onentry>
         <!-- fresh battery: values back to power-on defaults (DESIGN-NOTES D-8) -->
-        <send type="qt:signal" event="model.reset"/>
+        <send event="model.reset"/>
       </onentry>
 
       <transition event="battery.removed" target="dead"> <!-- T-03 -->
         <log label="T-03" expr="_event.name"/>
-        <assign location="hv" expr="({})"/> <!-- clh(main*) -->
+        <!-- clh(main*): -->
+            <assign location="hv_alarm1" expr="false"/>
+            <assign location="hv_alarm2" expr="false"/>
+            <assign location="hv_chime" expr="false"/>
+            <assign location="hv_stopwatch" expr="false"/>
       </transition>
 
       <!-- 2-minute returns: any button restarts the timer of the active display.
@@ -98,7 +108,7 @@
             <state id="timedate" initial="time">
 
               <state id="time">
-                <transition event="a.down" cond="hv.alarm1" target="alarm1_H"><log label="T-10" expr="_event.name"/></transition> <!-- T-10 -->
+                <transition event="a.down" cond="hv_alarm1" target="alarm1_H"><log label="T-10" expr="_event.name"/></transition> <!-- T-10 -->
                 <transition event="a.down" target="alarm1"><log label="T-10" expr="_event.name"/></transition> <!-- T-10 (history cleared) -->
                 <transition event="d.down" cond="In('bt_00') || In('bt_01')" target="date"><log label="T-20" expr="_event.name"/></transition> <!-- T-20 d(b up) -->
                 <transition event="c.down" target="wait"><log label="T-23" expr="_event.name"/></transition> <!-- T-23 -->
@@ -117,7 +127,7 @@
                 <onexit><cancel sendid="to_update"/></onexit>
                 <transition event="d.down"> <!-- T-27 increment the field being edited -->
                   <log label="T-27" expr="_event.name"/>
-                  <send type="qt:signal" event="model.increment">
+                  <send event="model.increment">
                     <param name="field" expr="firstActive(['update_sec','update_1min','update_10min','update_hr','update_mon','update_date','update_day','update_year','update_mode'])"/>
                   </send>
                 </transition>
@@ -173,7 +183,10 @@
                 <transition event="b.up" target="bt_01"><log label="T-81" expr="_event.name"/></transition> <!-- T-81 -->
                 <!-- Fig. 32 refinement -->
                 <state id="bt_beep_on">
-                  <transition event="a.down" cond="harelAnomalies" target="bt_beep_off"><log label="T-82" expr="_event.name"/></transition> <!-- T-82 -->
+                  <!-- !In('time'): in time, a leaves regular (T-10), which must pre-empt this
+                       inner transition (W3C document order; Harel's outer-scope priority).
+                       Qt 6.4 resolves the conflict the other way (DESIGN-NOTES D-12). -->
+                  <transition event="a.down" cond="harelAnomalies &amp;&amp; !In('time')" target="bt_beep_off"><log label="T-82" expr="_event.name"/></transition> <!-- T-82 -->
                 </state>
                 <state id="bt_beep_off">
                   <transition event="a.up" target="bt_beep_on"><log label="T-83" expr="_event.name"/></transition> <!-- T-83 -->
@@ -198,8 +211,8 @@
 
             <state id="alarm1" initial="alarm1_off">
               <history id="alarm1_H" type="shallow"><transition target="alarm1_off"/></history>
-              <onexit><assign location="hv.alarm1" expr="true"/></onexit>
-              <transition event="a.down" cond="hv.alarm2" target="alarm2_H"><log label="T-11" expr="_event.name"/></transition> <!-- T-11 -->
+              <onexit><assign location="hv_alarm1" expr="true"/></onexit>
+              <transition event="a.down" cond="hv_alarm2" target="alarm2_H"><log label="T-11" expr="_event.name"/></transition> <!-- T-11 -->
               <transition event="a.down" target="alarm2"><log label="T-11" expr="_event.name"/></transition> <!-- T-11 (history cleared) -->
               <transition event="c.down" target="update1_hr"><log label="T-30" expr="_event.name"/></transition> <!-- T-30 -->
               <state id="alarm1_off">
@@ -213,7 +226,7 @@
             <state id="update1" initial="update1_hr">
               <transition event="d.down"> <!-- T-33 -->
                 <log label="T-33" expr="_event.name"/>
-                <send type="qt:signal" event="model.increment">
+                <send event="model.increment">
                   <param name="field" expr="firstActive(['update1_hr','update1_10min','update1_1min'])"/>
                 </send>
               </transition>
@@ -231,8 +244,8 @@
 
             <state id="alarm2" initial="alarm2_off">
               <history id="alarm2_H" type="shallow"><transition target="alarm2_off"/></history>
-              <onexit><assign location="hv.alarm2" expr="true"/></onexit>
-              <transition event="a.down" cond="hv.chime" target="chime_H"><log label="T-12" expr="_event.name"/></transition> <!-- T-12 -->
+              <onexit><assign location="hv_alarm2" expr="true"/></onexit>
+              <transition event="a.down" cond="hv_chime" target="chime_H"><log label="T-12" expr="_event.name"/></transition> <!-- T-12 -->
               <transition event="a.down" target="chime"><log label="T-12" expr="_event.name"/></transition> <!-- T-12 (history cleared) -->
               <transition event="c.down" target="update2_hr"><log label="T-35" expr="_event.name"/></transition> <!-- T-35 -->
               <state id="alarm2_off">
@@ -246,7 +259,7 @@
             <state id="update2" initial="update2_hr">
               <transition event="d.down"> <!-- T-38 -->
                 <log label="T-38" expr="_event.name"/>
-                <send type="qt:signal" event="model.increment">
+                <send event="model.increment">
                   <param name="field" expr="firstActive(['update2_hr','update2_10min','update2_1min'])"/>
                 </send>
               </transition>
@@ -264,8 +277,8 @@
 
             <state id="chime" initial="chime_off">
               <history id="chime_H" type="shallow"><transition target="chime_off"/></history>
-              <onexit><assign location="hv.chime" expr="true"/></onexit>
-              <transition event="a.down" cond="hv.stopwatch" target="sw_H"><log label="T-13" expr="_event.name"/></transition> <!-- T-13 -->
+              <onexit><assign location="hv_chime" expr="true"/></onexit>
+              <transition event="a.down" cond="hv_stopwatch" target="sw_H"><log label="T-13" expr="_event.name"/></transition> <!-- T-13 -->
               <transition event="a.down" target="stopwatch"><log label="T-13" expr="_event.name"/></transition> <!-- T-13 (history cleared) -->
               <state id="chime_off">
                 <transition event="d.down" target="chime_on"><log label="T-46" expr="_event.name"/></transition> <!-- T-46 -->
@@ -279,14 +292,14 @@
           <!-- ....................................................... stopwatch -->
           <state id="stopwatch" initial="sw_zero">
             <history id="sw_H" type="deep"><transition target="sw_zero"/></history>
-            <onexit><assign location="hv.stopwatch" expr="true"/></onexit>
+            <onexit><assign location="hv_stopwatch" expr="true"/></onexit>
             <transition event="a.down" target="regular"><log label="T-14" expr="_event.name"/></transition> <!-- T-14 -->
 
             <state id="sw_zero">
               <transition event="b.down" target="sw_reg sw_on"> <!-- T-50, T-56 -->
                 <log label="T-50" expr="_event.name"/>
-                <send type="qt:signal" event="sw.start"/>
-                <send type="qt:signal" event="beep.short"/>
+                <send event="sw.start"/>
+                <send event="beep.short"/>
               </transition>
             </state>
             <parallel id="sw_nonzero">
@@ -294,11 +307,11 @@
                 <state id="sw_reg">
                   <transition event="d.down" cond="In('sw_on')" target="sw_lap"> <!-- T-53 -->
                     <log label="T-53" expr="_event.name"/>
-                    <send type="qt:signal" event="sw.lap"/>
+                    <send event="sw.lap"/>
                   </transition>
                   <transition event="d.down" cond="In('sw_off')" target="sw_zero"> <!-- T-55 -->
                     <log label="T-55" expr="_event.name"/>
-                    <send type="qt:signal" event="sw.reset"/>
+                    <send event="sw.reset"/>
                   </transition>
                 </state>
                 <state id="sw_lap">
@@ -309,15 +322,15 @@
                 <state id="sw_on">
                   <transition event="b.down" target="sw_off"> <!-- T-51, T-56 -->
                     <log label="T-51" expr="_event.name"/>
-                    <send type="qt:signal" event="sw.stop"/>
-                    <send type="qt:signal" event="beep.short"/>
+                    <send event="sw.stop"/>
+                    <send event="beep.short"/>
                   </transition>
                 </state>
                 <state id="sw_off">
                   <transition event="b.down" target="sw_on"> <!-- T-52, T-56 -->
                     <log label="T-52" expr="_event.name"/>
-                    <send type="qt:signal" event="sw.start"/>
-                    <send type="qt:signal" event="beep.short"/>
+                    <send event="sw.start"/>
+                    <send event="beep.short"/>
                   </transition>
                 </state>
               </state>
@@ -393,7 +406,11 @@
         <state id="power_blink">
           <transition event="battery.dies" target="dead"> <!-- T-02 -->
             <log label="T-02" expr="_event.name"/>
-            <assign location="hv" expr="({})"/> <!-- clh(main*) -->
+            <!-- clh(main*): -->
+            <assign location="hv_alarm1" expr="false"/>
+            <assign location="hv_alarm2" expr="false"/>
+            <assign location="hv_chime" expr="false"/>
+            <assign location="hv_stopwatch" expr="false"/>
           </transition>
         </state>
       </state>
