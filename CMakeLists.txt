@@ -96,6 +96,32 @@ if(WATCHME_DEPLOY)
         OUTPUT_SCRIPT deploy_script
     )
     install(SCRIPT ${deploy_script})
+
+    # The ECMAScript datamodel of Qt SCXML is a run-time plugin
+    # (plugins/scxmldatamodel) that Qt's deploy tooling does not pick up: without
+    # it the state machine has no datamodel. Install it explicitly.
+    if(TARGET Qt6::QScxmlEcmaScriptDataModelPlugin)
+        if(APPLE)
+            set(_dm_dir "watch-me.app/Contents/PlugIns/scxmldatamodel")
+        elseif(WIN32)
+            set(_dm_dir "${CMAKE_INSTALL_BINDIR}/scxmldatamodel")      # windeployqt layout
+        else()
+            set(_dm_dir "plugins/scxmldatamodel")                      # Qt's Linux deploy layout
+        endif()
+        install(FILES $<TARGET_FILE:Qt6::QScxmlEcmaScriptDataModelPlugin> DESTINATION "${_dm_dir}")
+        if(APPLE)
+            # Resolve @rpath/Qt*.framework inside the bundle, then re-sign (ad hoc):
+            # arm64 macOS refuses to load a modified, unsigned dylib.
+            install(CODE "set(_dm_rel \"${_dm_dir}/$<TARGET_FILE_NAME:Qt6::QScxmlEcmaScriptDataModelPlugin>\")")
+            install(CODE [[
+                set(_dm "${CMAKE_INSTALL_PREFIX}/${_dm_rel}")
+                execute_process(COMMAND install_name_tool -add_rpath @loader_path/../../Frameworks "${_dm}")
+                execute_process(COMMAND codesign --force --sign - "${_dm}" COMMAND_ERROR_IS_FATAL ANY)
+            ]])
+        endif()
+    else()
+        message(WARNING "Qt6::QScxmlEcmaScriptDataModelPlugin not found; the package will lack it")
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------

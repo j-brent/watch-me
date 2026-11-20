@@ -52,6 +52,13 @@ int main(int argc, char *argv[])
     cli.process(app);
 
     WatchMachine machine;
+    // The ecmascript datamodel is a Qt SCXML plugin; without it every condition and
+    // timer in watch.scxml fails. Say so instead of misbehaving.
+    if (!machine.dataModel()) {
+        qCritical("watch-me: Qt SCXML's ECMAScript datamodel plugin (plugins/scxmldatamodel) "
+                  "was not found; the installation is incomplete.");
+        return 2;
+    }
     ScxmlTreeModel tree;
     tree.load(QStringLiteral(":/statechart/watch.scxml"));
     SpecTags specTags;
