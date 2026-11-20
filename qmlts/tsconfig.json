@@ -1,0 +1,28 @@
+{
+  // Qt 6.8's JavaScript engine (V4) parses ES2016 plus ES modules, but not
+  // async/await, object spread, optional chaining's newer siblings or class
+  // fields. Target ES2016 so tsc lowers all of those; lib ES2016 so the type
+  // checker rejects library calls V4 may not have. No DOM: the few globals the
+  // QML engine provides are declared in src/qml-globals.d.ts.
+  "compilerOptions": {
+    "target": "ES2016",
+    "lib": ["ES2016"],
+    "module": "ES2020",
+    "moduleResolution": "bundler",
+    "rootDir": "src",
+    "outDir": "build",
+    "strict": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "useDefineForClassFields": false,
+    "types": [],
+    "newLine": "lf",
+    "removeComments": false,
+    "sourceMap": false
+  },
+  "include": ["src/**/*.mts", "src/**/*.d.ts"]
+}

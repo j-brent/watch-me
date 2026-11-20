@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Start the TypeScript/QML host of watch-me (qmlts/README.md).
+#
+#   qmlts/watch-me-qmlts [--no-gui] [--time ISO] [--script STEPS] [--exit] ...
+#
+# Needs the compiled modules: (cd qmlts && npm ci && npm run build).
+# Finds Qt's `qml` tool in $QT_QML_BIN (the tool itself), else on PATH, else in
+# $QT_ROOT_DIR/bin (set by install-qt-action).
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ ! -f "$here/build/script.mjs" ]]; then
+    echo "watch-me-qmlts: qmlts/build/ is missing; run: (cd qmlts && npm ci && npm run build)" >&2
+    exit 2
+fi
+
+qml="${QT_QML_BIN:-}"
+if [[ -z "$qml" ]]; then
+    if command -v qml >/dev/null 2>&1; then
+        qml="$(command -v qml)"
+    elif [[ -n "${QT_ROOT_DIR:-}" && -x "$QT_ROOT_DIR/bin/qml" ]]; then
+        qml="$QT_ROOT_DIR/bin/qml"
+    else
+        echo "watch-me-qmlts: Qt's qml tool not found; set QT_QML_BIN or put Qt's bin/ on PATH" >&2
+        exit 2
+    fi
+fi
+
+# --no-gui: a QCoreApplication, no window and no platform plugin.
+apptype=gui
+for a in "$@"; do
+    [[ "$a" == "--no-gui" ]] && apptype=core
+done
+
+# QML's XMLHttpRequest may read the statechart, the spec and layout.json, and
+# write the exported event log, only with these set
+# (https://doc.qt.io/qt-6/qml-qtqml-xmlhttprequest.html).
+export QML_XHR_ALLOW_FILE_READ=1
+export QML_XHR_ALLOW_FILE_WRITE=1
+# <log> elements are spec-row markers for the tracer, not console output.
+export QT_LOGGING_RULES="scxml.statemachine.debug=false${QT_LOGGING_RULES:+;$QT_LOGGING_RULES}"
+
+# Arguments after "--" reach Qt.application.arguments; --host-cwd lets relative
+# export paths resolve against the caller's directory.
+exec "$qml" --apptype "$apptype" "$here/qml/Host.qml" -- --host-cwd "$PWD" "$@"
