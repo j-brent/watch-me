@@ -91,6 +91,11 @@ jobs:
       - name: Test
         run: ctest --test-dir build --timeout 300
 
+      - name: Show test logs
+        # Qt Test also writes each suite's results to build/tests/<suite>.log
+        if: failure()
+        run: for f in build/tests/*.log; do echo "::group::$f"; cat "$f"; echo "::endgroup::"; done
+
       - name: Install and deploy the Qt runtime
         # Qt's deploy support needs an absolute prefix
         run: cmake --install build --prefix "$PWD/dist"
