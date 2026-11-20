@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Harel 1987, Fig. 31 — Citizen Quartz Multi-Alarm III. Spec: docs/STATECHART-SPEC.md -->
+<scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0"
+       name="WatchMachine" datamodel="ecmascript" initial="watch">
+  <state id="watch" initial="dead">
+    <state id="dead">
+      <transition event="battery.inserted" target="alive"><log label="T-01" expr="_event.name"/></transition> <!-- T-01 -->
+    </state>
+    <parallel id="alive">
+      <transition event="battery.removed" target="dead"><log label="T-03" expr="_event.name"/></transition> <!-- T-03 -->
+      <state id="main"/>
+    </parallel>
+  </state>
+</scxml>
