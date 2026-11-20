@@ -1,4 +1,7 @@
+# Test executables are console programs: qt_add_executable would otherwise make them
+# Windows GUI-subsystem executables (no captured output) and macOS bundles.
 qt_add_executable(tst_watch tst_watch.cpp)
+set_target_properties(tst_watch PROPERTIES WIN32_EXECUTABLE FALSE MACOSX_BUNDLE FALSE)
 target_link_libraries(tst_watch PRIVATE watchcore Qt6::Test)
 add_test(NAME tst_watch COMMAND tst_watch)
 set_tests_properties(tst_watch PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
@@ -10,11 +13,13 @@ if(Python3_FOUND)
 endif()
 
 qt_add_executable(tst_model tst_model.cpp)
+set_target_properties(tst_model PROPERTIES WIN32_EXECUTABLE FALSE MACOSX_BUNDLE FALSE)
 target_link_libraries(tst_model PRIVATE watchcore Qt6::Test)
 add_test(NAME tst_model COMMAND tst_model)
 set_tests_properties(tst_model PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 qt_add_executable(tst_tree tst_tree.cpp)
+set_target_properties(tst_tree PROPERTIES WIN32_EXECUTABLE FALSE MACOSX_BUNDLE FALSE)
 target_link_libraries(tst_tree PRIVATE watchcore Qt6::Test)
 add_test(NAME tst_tree COMMAND tst_tree)
 set_tests_properties(tst_tree PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

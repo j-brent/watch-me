@@ -67,7 +67,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libgl1-mesa-dev libegl1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 \
-            libfontconfig1 libdbus-1-3 libpulse0
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libfontconfig1 libdbus-1-3 libpulse0 \
+            xvfb xauth
 
       - name: Install Qt ${{ env.QT_VERSION }}
         uses: jurplel/install-qt-action@v4
@@ -90,22 +92,26 @@ jobs:
         run: ctest --test-dir build --timeout 300
 
       - name: Install and deploy the Qt runtime
-        run: cmake --install build --prefix dist
+        # Qt's deploy support needs an absolute prefix
+        run: cmake --install build --prefix "$PWD/dist"
 
       - name: Smoke-test the packaged app
-        # Starts the *deployed* app headless, inserts the battery, walks the display
-        # cycle and saves a screenshot: fails if any Qt library or QML module is missing.
+        # Starts the *deployed* app with the platform plugin it ships (cocoa, windows,
+        # xcb under a virtual X server), inserts the battery, walks the display cycle
+        # and saves a screenshot: fails if any Qt library, plugin or QML module is
+        # missing from the package.
         run: |
+          wrap=()
           case "${{ runner.os }}" in
-            Linux)   app=dist/bin/watch-me ;;
+            Linux)   app=dist/bin/watch-me; wrap=(xvfb-run -a -s "-screen 0 1920x1080x24") ;;
             Windows) app=dist/bin/watch-me.exe ;;
             macOS)   app=dist/watch-me.app/Contents/MacOS/watch-me ;;
           esac
           # Use only what was deployed: install-qt-action points these variables at
           # the Qt installation, which would load a second copy of Qt's libraries
           # (crash on macOS) and hide anything missing from the package.
-          env -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QML_IMPORT_PATH -u LD_LIBRARY_PATH \
-              -u QT_ROOT_DIR -u Qt6_DIR \
+          "${wrap[@]}" env -u QT_QPA_PLATFORM -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
+              -u QML_IMPORT_PATH -u LD_LIBRARY_PATH -u QT_ROOT_DIR -u Qt6_DIR \
               "$app" --script "battery.inserted;a;a;a;a;b" --grab smoke.png
           test -s smoke.png
 
