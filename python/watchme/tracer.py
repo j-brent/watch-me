@@ -27,7 +27,7 @@ class TransitionTracer(QObject):
         self._clock.start()
         self._active: set[str] = set()
         self._active_list: list[str] = []
-        self._recent: list[set[str]] = []      # last 4 stable configurations, newest first
+        self._recent: list[set[str]] = []      # last 4 distinct stable configurations, newest first
         self._flash: dict[str, int] = {}
         self._entries: list[str] = []
         self._data: dict = {}                  # last host.data (the hv_* flags, D-24)
@@ -69,7 +69,9 @@ class TransitionTracer(QObject):
         entered = now - self._active
         self._active = now
         self._active_list = list(names)
-        self._recent.insert(0, now)
+        # only distinct configurations (HOST-CONTRACT §4.3, DESIGN-NOTES D-26)
+        if not self._recent or self._recent[0] != now:
+            self._recent.insert(0, now)
         del self._recent[4:]
         self.activeChanged.emit()
         if entered:

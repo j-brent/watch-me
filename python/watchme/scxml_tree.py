@@ -82,9 +82,12 @@ class ScxmlTreeModel(QObject):
                     n.initial = child.get("initial", "")
                     walk(child, sid)
                 elif tag == "transition":
-                    # Not chart transitions: a <history>'s default (D-22), host.* (D-24).
+                    # Not chart transitions: a <history>'s default (D-22), and a transition
+                    # whose events are all host.* (D-24).
                     event = child.get("event", "")
-                    if self.nodes[owner].kind == "history" or event.startswith("host."):
+                    events = event.split()
+                    if self.nodes[owner].kind == "history" or (
+                            events and all(e.startswith("host.") for e in events)):
                         continue
                     t = Transition(owner, event, child.get("cond", ""), (child.get("target") or "").split(),
                                    child.get("type", "external"))
