@@ -1,0 +1,158 @@
+# Build, test and package watch-me on Ubuntu, Windows and macOS.
+#
+# Runs on every push to main and every pull request. release.yml calls this same
+# workflow (workflow_call), so a release ships exactly the packages that were
+# built and tested here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version string used in package names (e.g. v1.2.0)"
+        type: string
+        required: false
+        default: ""
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  QT_VERSION: "6.8.3"          # LTS; the code itself needs Qt >= 6.4 (see the distro job)
+  QT_QPA_PLATFORM: offscreen   # all GUI code and tests run headless
+  CTEST_OUTPUT_ON_FAILURE: "1"
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu
+            os: ubuntu-24.04
+            package: watch-me-linux-x86_64.tar.gz
+          - name: Windows
+            os: windows-2022
+            package: watch-me-windows-x64.zip
+          - name: macOS
+            os: macos-14
+            package: watch-me-macos.dmg
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ninja
+        run: python -m pip install ninja
+
+      - name: Install Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-dev libegl1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 \
+            libfontconfig1 libdbus-1-3 libpulse0
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          modules: qtscxml qtmultimedia
+          cache: true
+
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DWATCHME_DEPLOY=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --timeout 300
+
+      - name: Install and deploy the Qt runtime
+        run: cmake --install build --prefix dist
+
+      - name: Smoke-test the packaged app
+        # Starts the *deployed* app headless, inserts the battery, walks the display
+        # cycle and saves a screenshot: fails if any Qt library or QML module is missing.
+        run: |
+          case "${{ runner.os }}" in
+            Linux)   app=dist/bin/watch-me ;;
+            Windows) app=dist/bin/watch-me.exe ;;
+            macOS)   app=dist/watch-me.app/Contents/MacOS/watch-me ;;
+          esac
+          "$app" --script "battery.inserted;a;a;a;a;b" --grab smoke.png
+          test -s smoke.png
+
+      - name: Package
+        run: |
+          name="${{ matrix.package }}"
+          if [ -n "${{ inputs.version }}" ]; then name="${name/watch-me-/watch-me-${{ inputs.version }}-}"; fi
+          case "${{ runner.os }}" in
+            Linux)
+              mv dist "watch-me"
+              tar -czf "$name" watch-me ;;
+            Windows)
+              mv dist "watch-me"
+              7z a -tzip "$name" watch-me > /dev/null ;;
+            macOS)
+              # ad-hoc signature (deployment rewrote the bundle); not notarized
+              codesign --force --deep --sign - dist/watch-me.app
+              hdiutil create -volname watch-me -srcfolder dist/watch-me.app -ov -format UDZO "$name" ;;
+          esac
+          echo "PACKAGE=$name" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ runner.os }}
+          path: ${{ env.PACKAGE }}
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-screenshot-${{ runner.os }}
+          path: smoke.png
+          if-no-files-found: ignore
+
+  # Keeps the documented minimum honest: Ubuntu's own Qt 6.4 packages, as used in
+  # development (DESIGN-NOTES D-1). Build and tests only, no package.
+  distro-qt-6-4:
+    name: Ubuntu (distro Qt 6.4)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Qt 6.4 from Ubuntu
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake g++ \
+            qt6-base-dev qt6-declarative-dev qt6-scxml-dev qml6-module-qtquick-shapes \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick-window qml6-module-qtqml-workerscript qml6-module-qtquick-templates \
+            libgl1-mesa-dev
+      - name: Configure
+        run: cmake -B build -G Ninja
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --timeout 300

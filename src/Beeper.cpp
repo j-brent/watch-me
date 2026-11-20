@@ -7,6 +7,7 @@
 #include <QDataStream>
 #include <QUrl>
 #include <cmath>
+#include <numbers>
 
 static QByteArray wav(double seconds, bool twoTone)
 {
@@ -18,7 +19,7 @@ static QByteArray wav(double seconds, bool twoTone)
     for (int i = 0; i < n; ++i) {
         const double t = double(i) / rate;
         const double f = twoTone && (int(t * 8) % 2) ? 2730.0 : 2048.0;   // piezo-like tones
-        s[i] = qint16(9000 * (std::sin(2 * M_PI * f * t) > 0 ? 1 : -1));
+        s[i] = qint16(9000 * (std::sin(2 * std::numbers::pi * f * t) > 0 ? 1 : -1));
     }
     QByteArray out;
     QDataStream ds(&out, QIODevice::WriteOnly);

@@ -183,6 +183,15 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
   default branch. This is exact for interactive use (one button event per
   macrostep). A burst of many queued events can mis-attribute the source/target
   text of a line; the T-xx itself is always exact.
+- **D-19 CI and releases.** GitHub-hosted runners can reach download.qt.io, so CI
+  uses Qt 6.8 LTS (via `jurplel/install-qt-action`) on Ubuntu, Windows and macOS.
+  A separate job builds against Ubuntu's Qt 6.4 so the documented minimum stays
+  true. Packaging uses Qt's own deployment (`qt_generate_deploy_qml_app_script`,
+  behind `-DWATCHME_DEPLOY=ON`, Qt ≥ 6.5), so `cmake --install` produces a
+  self-contained tree on all three platforms. The release workflow reuses the CI
+  workflow (`workflow_call`), so published packages are exactly the tested
+  ones. To make the code build on MSVC: `/utf-8` (non-ASCII literals) and
+  `std::numbers::pi` instead of `M_PI`.
 
 ## 3. Open deviations from the paper (summary)
 

@@ -1,5 +1,7 @@
 # watch-me
 
+[![CI](https://github.com/j-brent/watch-me/actions/workflows/ci.yml/badge.svg)](https://github.com/j-brent/watch-me/actions/workflows/ci.yml)
+
 An executable version of the most famous statechart in software engineering: the
 **Citizen Quartz Multi-Alarm III** digital watch from David Harel's 1987 paper
 *"Statecharts: A Visual Formalism for Complex Systems"*. It is built with Qt Quick
@@ -87,8 +89,37 @@ The project was developed with the Ubuntu 24.04 packages (Qt 6.4.2):
 `qt6-base-dev qt6-declarative-dev qt6-scxml-dev qml6-module-qtquick-shapes
 qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window
 qml6-module-qtqml-workerscript qml6-module-qtquick-templates` (+ `qt6-multimedia-dev`
-for sound). With `aqtinstall`:
-`aqt install-qt linux desktop 6.8.0 linux_gcc_64 -m qtscxml qtshapes`.
+for sound). With `aqtinstall` (Qt Quick Shapes ships with the base Qt Declarative
+module; only SCXML and, optionally, Multimedia are add-ons):
+`aqt install-qt linux desktop 6.8.3 linux_gcc_64 -m qtscxml qtmultimedia`.
+
+On macOS the app builds as `build/watch-me.app`, on Windows as a GUI executable.
+`cmake -B build -G Ninja -DWATCHME_DEPLOY=ON` plus `cmake --install build --prefix dist`
+produces a self-contained install with the Qt runtime deployed next to it (Qt ≥ 6.5).
+
+## CI and releases
+
+- **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push
+  to `main` and every pull request. On Ubuntu 24.04, Windows (MSVC 2022) and macOS 14
+  with Qt 6.8 LTS, it builds and runs `ctest`. It then deploys the Qt runtime,
+  smoke-tests the deployed app headless, and uploads the package as an artifact. A
+  fourth job builds and tests against Ubuntu's own Qt 6.4 packages, the minimum
+  supported version.
+- **Release** ([`.github/workflows/release.yml`](.github/workflows/release.yml)):
+  push a tag such as `v1.0.0`. It runs the CI workflow on the tag, and only if all
+  three platforms build, test and package successfully does it publish a GitHub
+  release with the three packages and a `SHA256SUMS.txt`:
+  `watch-me-<tag>-linux-x86_64.tar.gz`, `watch-me-<tag>-windows-x64.zip`,
+  `watch-me-<tag>-macos.dmg`. Tags with a hyphen (`v1.0.0-rc1`) become
+  pre-releases.
+
+  ```sh
+  git tag v1.0.0 && git push origin v1.0.0
+  ```
+
+  The macOS app is ad-hoc signed but not notarized (right-click → Open the first
+  time). The Windows build is unsigned. The Linux tarball needs the usual X11/Wayland
+  libraries of the desktop (e.g. `libxcb-cursor0`).
 
 Headless: `QT_QPA_PLATFORM=offscreen`. `tools/screenshots.sh` regenerates
 `docs/screenshots/` with the app's `--script`/`--grab` options.
