@@ -131,6 +131,9 @@ ROWS = [
 ]
 
 
+APP_FAILURES = []   # rows whose app run produced no log, with the app's own output
+
+
 def run(row):
     rid, steps, expect, active, forbid = row
     with tempfile.TemporaryDirectory() as d:
@@ -138,14 +141,23 @@ def run(row):
         script = "battery.inserted;wait:150;" + ";".join(
             s + ";wait:120" for s in steps.split(";") if s) + f";wait:200;export:{out}"
         env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
+        app_status = ""
         try:
-            subprocess.run([str(BIN), "--time", "1987-06-01T10:08:30", "--manual-time", "--exit",
-                            "--grab-delay", "50", "--script", script], env=env,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
-        except subprocess.TimeoutExpired:
-            pass                                  # no log: the row fails below
+            proc = subprocess.run([str(BIN), "--time", "1987-06-01T10:08:30", "--manual-time", "--exit",
+                                   "--grab-delay", "50", "--script", script], env=env,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
+            app_output = proc.stdout.decode("utf-8", errors="replace")
+            app_status = f"exit code {proc.returncode}"
+        except subprocess.TimeoutExpired as e:
+            app_output = (e.stdout or b"").decode("utf-8", errors="replace")
+            app_status = "timed out after 60 s"
         text = pathlib.Path(out).read_text(encoding="utf-8") if os.path.exists(out) else ""
     lines = text.splitlines()
+    if not lines:
+        # The app produced no event log at all: say why instead of only listing
+        # every expectation as missing.
+        tail = [l for l in app_output.splitlines() if l.strip()][-8:]
+        APP_FAILURES.append(f"{rid}: app {app_status}; output:\n    " + "\n    ".join(tail or ["(none)"]))
     act = next((l[len("# active: "):].split() for l in lines if l.startswith("# active: ")), [])
     seen = [e for e in expect if any(e in l for l in lines)]
     missing = [e for e in expect if e not in seen]
@@ -216,6 +228,10 @@ def main():
            "  paper never enters `out` by default (D-17).",
            "- The unnamed components are named `timedate` (in `regular`) and `nonzero` (in",
            "  `stopwatch`) because SCXML states need ids (D-17).", ""]
+    if APP_FAILURES:
+        print(f"FAIL the app produced no event log in {len(APP_FAILURES)} run(s); first ones:")
+        for a in APP_FAILURES[:3]:
+            print("  " + a)
     doc = ROOT / "docs/VERIFICATION.md"
     text = "\n".join(md)
     stale = False
