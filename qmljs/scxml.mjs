@@ -121,7 +121,8 @@ export function parse(xml) {
                     const owner = stack[stack.length - 1];
                     if (nodes[owner].kind === "history")          // default transition of a <history> (D-22)
                         return;
-                    if ((a.event || "").startsWith("host."))      // host boundary plumbing (D-24)
+                    const events = (a.event || "").split(/\s+/).filter(e => e.length > 0);
+                    if (events.length && events.every(e => e.startsWith("host.")))   // host boundary plumbing (D-24)
                         return;
                     transitions.push({
                         source: owner,

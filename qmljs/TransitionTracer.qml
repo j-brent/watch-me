@@ -17,7 +17,7 @@ QtObject {
     property var entries: []
     property string lastSpecId: ""
     property var _fired: ({})
-    property var _recent: []             // last 4 stable configurations (sets), newest first
+    property var _recent: []             // last 4 distinct stable configurations (sets), newest first
     property var _prevActive: ({})
     property var _data: ({})             // last host.data: the hv_* flags (D-24)
     property real _stamp: 0
@@ -77,8 +77,13 @@ QtObject {
         activeStates = names
         activeSet = now
         _prevActive = now
+        // only distinct configurations (HOST-CONTRACT §4.3, DESIGN-NOTES D-26)
         const r = _recent.slice()
-        r.unshift(now)
+        const newest = r[0]
+        const same = newest !== undefined && Object.keys(newest).length === Object.keys(now).length
+                     && Object.keys(now).every(s => newest[s] === true)
+        if (!same)
+            r.unshift(now)
         while (r.length > 4)
             r.pop()
         _recent = r
