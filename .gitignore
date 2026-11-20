@@ -1,2 +1,4 @@
 build/
 *.user
+python/.venv/
+__pycache__/
