@@ -97,7 +97,11 @@ export class TransitionTracer {
             map[s] = true;
         this.activeMap = map;
         this.prevActive = now;
-        this.recent.unshift(now);
+        // only distinct configurations (HOST-CONTRACT §4.3, DESIGN-NOTES D-26)
+        const newest = this.recent[0];
+        const same = newest !== undefined && newest.size === now.size && [...now].every((s) => newest.has(s));
+        if (!same)
+            this.recent.unshift(now);
         if (this.recent.length > RECENT)
             this.recent.length = RECENT;
         this.sink.activeChanged();

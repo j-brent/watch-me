@@ -124,8 +124,10 @@ export class ScxmlTree {
                     if (owner.kind === "history")
                         continue;
                     const event = a.get("event") ?? "";
-                    // host-boundary plumbing (host.*, D-24) is not part of the chart
-                    if (event.startsWith("host."))
+                    // host-boundary plumbing (D-24) is not part of the chart: a transition
+                    // whose events are all host.* events
+                    const events = event.split(/\s+/).filter((e) => e.length > 0);
+                    if (events.length > 0 && events.every((e) => e.startsWith("host.")))
                         continue;
                     this.list.push({
                         source: owner.id,
