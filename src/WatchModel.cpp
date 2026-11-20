@@ -23,7 +23,7 @@ WatchModel::WatchModel(QScxmlStateMachine *machine, QObject *parent)
         });
         m_machine->connectToEvent(QStringLiteral("sw.stop"), this, [this](const QScxmlEvent &) {
             if (m_swRunning) {
-                m_swAccum += (m_simMs - m_swStartMs) / 10;
+                m_swAccumMs += m_simMs - m_swStartMs;   // keep ms: no rounding per segment
                 m_swRunning = false;
                 emit stopwatchChanged();
             }
@@ -33,7 +33,7 @@ WatchModel::WatchModel(QScxmlStateMachine *machine, QObject *parent)
             emit stopwatchChanged();
         });
         m_machine->connectToEvent(QStringLiteral("sw.reset"), this, [this](const QScxmlEvent &) {
-            m_swAccum = 0; m_lap = 0; m_swRunning = false;
+            m_swAccumMs = 0; m_lap = 0; m_swRunning = false;
             emit stopwatchChanged();
         });
         m_machine->connectToEvent(QStringLiteral("beep.short"), this, [this](const QScxmlEvent &) { emit shortBeep(); });
@@ -51,7 +51,7 @@ int WatchModel::weekday() const
 
 qint64 WatchModel::stopwatchCentis() const
 {
-    return m_swAccum + (m_swRunning ? (m_simMs - m_swStartMs) / 10 : 0);
+    return (m_swAccumMs + (m_swRunning ? m_simMs - m_swStartMs : 0)) / 10;
 }
 
 void WatchModel::setSpeed(double s)
@@ -107,8 +107,8 @@ void WatchModel::advance(qint64 simMs)
         if (t.time().minute() == 0)
             submit(QStringLiteral("T.hits.hour"));
     }
-    if (before.time().second() != m_now.time().second() || before.date() != m_now.date()
-        || before.time().minute() != m_now.time().minute())
+    // Any change of the displayed fields (s, min, h, date): whole seconds differ.
+    if (before.toSecsSinceEpoch() != m_now.toSecsSinceEpoch())
         emit timeChanged();
     if (m_swRunning)
         emit stopwatchChanged();
@@ -174,7 +174,7 @@ void WatchModel::reset()
     m_weekdayOffset = 0;
     m_24h = false;
     m_t1 = m_t2 = 12 * 60;
-    m_swAccum = 0;
+    m_swAccumMs = 0;
     m_lap = 0;
     m_swRunning = false;
     pushAlarmsToMachine();

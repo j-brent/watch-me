@@ -22,12 +22,15 @@ public:
     Q_INVOKABLE void release(const QString &button);
     Q_INVOKABLE void releaseAll();
     Q_INVOKABLE void submit(const QString &event);   // any other external event
-    // Sim panel: write a datamodel value (e.g. the harelAnomalies flag).
+    // Sim panel: write a datamodel value (e.g. the harelAnomalies flag). Write
+    // through here (not the datamodel directly) so views showing it stay in sync.
     Q_INVOKABLE void setDataValue(const QString &name, const QVariant &value);
     Q_INVOKABLE QVariant dataValue(const QString &name) const;
 
 signals:
     void heldChanged();
+    // `name` was written with setDataValue; empty: the datamodel was (re)initialized.
+    void dataValueChanged(const QString &name);
 
 private:
     QScxmlStateMachine *m_machine;

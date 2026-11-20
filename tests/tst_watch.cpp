@@ -321,6 +321,26 @@ void TstWatch::updateTimeout()
     w.advance(1);
     FIRED(w, "T-29");
     QVERIFY(w.in("time"));
+
+    // Chained timeouts in one step (DESIGN-NOTES D-21): T-25 at 2 s arms update's
+    // 2-min timer at 2 s, so T-29 fires at 122 s within the same advance().
+    w.down('c');
+    w.reset();
+    w.advance(2 * kSec + 2 * kMin - 1);
+    FIRED(w, "T-25");
+    NOT_FIRED(w, "T-29");
+    QVERIFY(w.in("update_sec"));
+    w.advance(1);
+    FIRED(w, "T-29");
+    QVERIFY(w.in("time"));
+    w.up('c');
+    w.down('c');
+    w.reset();
+    w.advance(2 * kSec + 2 * kMin);          // the whole chain in a single step
+    FIRED(w, "T-25");
+    FIRED(w, "T-29");
+    QVERIFY(w.in("time"));
+    w.up('c');
 }
 
 void TstWatch::dateTimeout()

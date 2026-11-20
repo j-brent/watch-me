@@ -4,7 +4,9 @@
   Complex Systems", Sci. Comput. Programming 8 (1987), Fig. 31 (+ Fig. 32 behind a flag).
 
   Single source of truth for behaviour: docs/STATECHART-SPEC.md. Every transition
-  carries a <!- - T-xx - -> comment and a <log label="T-xx"/> naming its spec row.
+  carries a <!- - T-xx - -> comment and a <log label="T-xx"/> naming its spec row,
+  except the default transition inside a <history>, which is not a spec row
+  (STATECHART-SPEC §3, DESIGN-NOTES D-22).
   C++ only observes the outgoing sends below (model.*, sw.*, beep.short) and only
   submits buttons, battery events and "T hits" events.
 

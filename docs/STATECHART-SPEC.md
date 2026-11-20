@@ -105,6 +105,10 @@ SCXML IDs are global, so they use underscores and full paths:
 
 `(in x)` in the paper corresponds to SCXML `cond="In('x')"`.
 
+Every row below is a user transition. The default transition inside an SCXML
+`<history>` (where an H goes when it has no value yet) is not a row: it is part of
+the H connector, never taken on an event, and carries no `T-xx` (DESIGN-NOTES D-22).
+
 ### 3.1 Top level
 | ID | From | Event [cond] / action | To | Src |
 |---|---|---|---|---|

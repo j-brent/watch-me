@@ -7,6 +7,8 @@
   renders and forwards input. No mode logic in C++ or QML.
 - Every `<transition>` carries a `<!-- T-xx -->` comment **and** a
   `<log label="T-xx" expr="_event.name"/>` (the log drives the live event log).
+  The one exception is the default transition inside a `<history>`: it is not a
+  spec row (STATECHART-SPEC §3, DESIGN-NOTES D-22).
   `python3 tests/conformance.py` must pass (spec ↔ SCXML ↔ tests).
 - Timeouts ("n sec in X") are `timer.start`/`timer.cancel` sends answered by
   `TimeoutService` with a generation-guarded `timeout.<id>` (DESIGN-NOTES D-20).

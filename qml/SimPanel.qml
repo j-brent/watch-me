@@ -11,6 +11,10 @@ Rectangle {
 
     function two(n) { return (n < 10 ? "0" : "") + n }
 
+    // Emitted when a text/number field is done with: Main gives keyboard focus back
+    // to the A/B/C/D keys.
+    signal editingDone()
+
     ColumnLayout {
         id: col
         x: 8; y: 8
@@ -51,12 +55,12 @@ Rectangle {
         RowLayout {
             spacing: 4
             Label { text: "Set T"; font.bold: true; Layout.preferredWidth: 62 }
-            SpinBox { id: hh; from: 0; to: 23; value: 12; editable: true; Layout.preferredWidth: 92; focusPolicy: Qt.ClickFocus }
+            SpinBox { id: hh; Keys.onReturnPressed: panel.editingDone(); Keys.onEnterPressed: panel.editingDone(); Keys.onEscapePressed: panel.editingDone(); from: 0; to: 23; value: 12; editable: true; Layout.preferredWidth: 92; focusPolicy: Qt.ClickFocus }
             Label { text: ":" }
-            SpinBox { id: mm; from: 0; to: 59; value: 0; editable: true; Layout.preferredWidth: 92; focusPolicy: Qt.ClickFocus }
+            SpinBox { id: mm; Keys.onReturnPressed: panel.editingDone(); Keys.onEnterPressed: panel.editingDone(); Keys.onEscapePressed: panel.editingDone(); from: 0; to: 59; value: 0; editable: true; Layout.preferredWidth: 92; focusPolicy: Qt.ClickFocus }
             Label { text: ":" }
-            SpinBox { id: ss; from: 0; to: 59; value: 0; editable: true; Layout.preferredWidth: 92; focusPolicy: Qt.ClickFocus }
-            Button { text: "set"; focusPolicy: Qt.NoFocus; onClicked: watch.setTime(hh.value, mm.value, ss.value) }
+            SpinBox { id: ss; Keys.onReturnPressed: panel.editingDone(); Keys.onEnterPressed: panel.editingDone(); Keys.onEscapePressed: panel.editingDone(); from: 0; to: 59; value: 0; editable: true; Layout.preferredWidth: 92; focusPolicy: Qt.ClickFocus }
+            Button { text: "set"; focusPolicy: Qt.NoFocus; onClicked: { watch.setTime(hh.value, mm.value, ss.value); panel.editingDone() } }
         }
         RowLayout {
             spacing: 4
@@ -104,6 +108,20 @@ Rectangle {
                 text: "Fig. 32 quirk"
                 checked: true
                 focusPolicy: Qt.NoFocus
+                // Show the datamodel's value, however it was set (e.g. --script set:...).
+                function refresh() {
+                    const v = buttons.dataValue("harelAnomalies")
+                    if (v !== undefined && v !== null)
+                        checked = v === true
+                }
+                Component.onCompleted: refresh()
+                Connections {
+                    target: buttons
+                    function onDataValueChanged(name) {
+                        if (name === "" || name === "harelAnomalies")
+                            anomalies.refresh()
+                    }
+                }
                 ToolTip.visible: hovered; ToolTip.text: "harelAnomalies: pressing a silences the beep-test beep until a is released"
                 onToggled: buttons.setDataValue("harelAnomalies", checked)
             }
@@ -125,13 +143,15 @@ Rectangle {
                 Layout.fillWidth: true
                 text: "watch-me-events.txt"
                 selectByMouse: true
+                onAccepted: panel.editingDone()
+                Keys.onEscapePressed: panel.editingDone()
             }
             Button {
                 text: "export"
                 focusPolicy: Qt.NoFocus
-                onClicked: status.text = tracer.exportLog(path.text) ? "saved" : "failed"
+                onClicked: { status.text = tracer.exportLog(path.text) ? "saved" : "failed"; panel.editingDone() }
             }
-            Button { text: "clear"; focusPolicy: Qt.NoFocus; onClicked: tracer.clearLog() }
+            Button { text: "clear"; focusPolicy: Qt.NoFocus; onClicked: { tracer.clearLog(); panel.editingDone() } }
             Label { id: status; color: "#5a5d63"; font.pixelSize: 11 }
         }
     }

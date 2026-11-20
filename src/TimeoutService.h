@@ -24,7 +24,9 @@ class TimeoutService : public QObject
 public:
     explicit TimeoutService(QScxmlStateMachine *machine, QObject *parent = nullptr);
 
-    // Move the clock forward; fires every deadline reached, earliest first.
+    // Move the clock forward; fires every deadline reached, earliest first. Each
+    // timeout is handled by the machine at its own deadline before the next one is
+    // looked for, so a timer started by a timeout can fire within the same step.
     Q_INVOKABLE void advance(qint64 ms);
     qint64 now() const { return m_now; }
     // Pending deadline of a timer in ms from now, or -1 if it is not armed.
@@ -42,6 +44,7 @@ private:
     QScxmlStateMachine *m_machine;
     QHash<QString, Pending> m_pending;
     qint64 m_now = 0;
+    bool m_advancing = false;   // advance() drains the event queue: no re-entry
     QTimer m_timer;
     QElapsedTimer m_real;
     qint64 m_lastReal = 0;

@@ -126,7 +126,7 @@ Headless: `QT_QPA_PLATFORM=offscreen`. `tools/screenshots.sh` regenerates
 | Path | Purpose |
 |---|---|
 | `docs/STATECHART-SPEC.md` | **Source of truth** for behaviour: events, hierarchy, every transition as a numbered row `T-xx` with its confidence tag |
-| `statechart/watch.scxml` | The machine. Every transition carries `<!-- T-xx -->` and `<log label="T-xx"/>` |
+| `statechart/watch.scxml` | The machine. Every transition (except `<history>` defaults) carries `<!-- T-xx -->` and `<log label="T-xx"/>` |
 | `statechart/layout.json` | View hints only (button placement, rows/columns of the statechart view) |
 | `src/` | `WatchModel` (values), `TimeoutService` (the clock behind the statechart's timeouts), `ButtonRouter` (input), `ScxmlTreeModel` + `TransitionTracer` + `SpecTags` (view data), `Beeper` (optional sound) |
 | `qml/` | `WatchFace`, `Lcd`, `SevenSegment`, `StatechartView`, `StateBox`, `TransitionOverlay`, `Legend`, `SimPanel`, `EventLog` |

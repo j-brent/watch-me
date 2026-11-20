@@ -117,7 +117,9 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
 - **D-6 Stopwatch counter.** Driven by outgoing events on transitions
   (`sw.start` on T-50/T-52, `sw.stop` on T-51, `sw.reset` on T-55, `sw.lap` on T-53)
   rather than by `run.on` being active, because `run.on` is not active while
-  another display is shown, but the stopwatch keeps counting.
+  another display is shown, but the stopwatch keeps counting. The counter keeps
+  simulated milliseconds and only shows centiseconds, so stopping does not round a
+  run segment down (each stop used to lose up to 9 ms).
 - **D-7 alarms-beep display.** The paper notes "the displays do not change while
   the alarm is beeping" but defers it to activities. The LCD shows the time display
   with the whole LCD flashing.
@@ -219,6 +221,26 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
     guard each makes a test fail.
   - `tools/verify.py` runs the app with `--manual-time` and moves time with the
     `advance:ms` / `clock:ms` script steps.
+- **D-21 Timeouts handled at their own deadline.** `TimeoutService::advance(ms)`
+  used to submit every deadline in the step and only then let the machine run, so
+  a timer started *by* a timeout (wait's 2 s leading to update's 2 min) was armed
+  at the end of the step: `advance(122 s)` from `wait` stayed in `update`. Now,
+  after submitting each `timeout.<id>`, the service lets the machine process it
+  (`QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall)`: Qt SCXML runs
+  its queue from a queued meta-call) with the clock at that deadline, so the
+  timers it starts count from there and can fire within the same step. It also
+  drains once before the step, so timers requested by input submitted just before
+  start at the current time. `advance` does not re-enter itself.
+  Observed in Qt 6.8: `connectToEvent` handlers for the machine's own sends run
+  while the send executes, inside the macrostep, so `model.reset` (sent on entry
+  to `alive`) reaches `WatchModel` before any button already queued behind
+  `battery.inserted` (checked by `tst_model::resetBeforeQueuedInput`).
+- **D-22 History default transitions carry no T-xx.** The default transition
+  inside a `<history>` (`displays_H`, `alarm1_H`, `alarm2_H`, `chime_H`, `sw_H`) says
+  where the H goes before it has a value; it is part of the H connector, not a
+  transition of the paper's figure, and no event takes it. It has no spec row,
+  `<!-- T-xx -->` or `<log>`; `conformance.py` and `ScxmlTreeModel` skip it, and
+  CLAUDE.md states the exception.
 
 ## 3. Open deviations from the paper (summary)
 

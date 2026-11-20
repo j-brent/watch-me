@@ -1,6 +1,7 @@
 #include "TimeoutService.h"
 #include <QScxmlStateMachine>
 #include <QScxmlEvent>
+#include <QCoreApplication>
 #include <limits>
 
 TimeoutService::TimeoutService(QScxmlStateMachine *machine, QObject *parent)
@@ -24,10 +25,23 @@ TimeoutService::TimeoutService(QScxmlStateMachine *machine, QObject *parent)
     });
 }
 
+// Let the machine handle what has been submitted to it, now. QScxmlStateMachine
+// processes its external queue from a queued meta-call, so this delivers posted
+// MetaCall events; the machine's sends (timer.start/cancel) are observed while it
+// runs. https://doc.qt.io/qt-6/qcoreapplication.html#sendPostedEvents
+static void drainMachine()
+{
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+}
+
 void TimeoutService::advance(qint64 ms)
 {
-    if (ms < 0)
+    if (ms < 0 || m_advancing)
         return;
+    m_advancing = true;
+    // Timers already requested (e.g. by a button just submitted) start at the
+    // current time, not at the end of this step.
+    drainMachine();
     const qint64 end = m_now + ms;
     for (;;) {
         // earliest pending deadline within this step
@@ -45,8 +59,12 @@ void TimeoutService::advance(qint64 ms)
         emit fired(id);
         m_machine->submitEvent(QStringLiteral("timeout.") + id,
                                QVariantMap{{QStringLiteral("gen"), p.gen}});
+        // Handle the timeout at its own time `due`: a timer it starts is due
+        // relative to `due` and may itself fire within this step (DESIGN-NOTES D-21).
+        drainMachine();
     }
     m_now = end;
+    m_advancing = false;
 }
 
 qint64 TimeoutService::remaining(const QString &id) const

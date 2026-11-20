@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
         } else if (parts.first() == u"set" && parts.size() == 3) {          // set:harelAnomalies:false
             const QVariant v = parts[2] == u"true" ? QVariant(true)
                              : parts[2] == u"false" ? QVariant(false) : QVariant(parts[2].toDouble());
-            machine.dataModel()->setScxmlProperty(parts[1], v, QString());
+            buttons.setDataValue(parts[1], v);          // keeps the sim panel in sync
         } else if (s.size() == 1) {
             buttons.press(s);
             QTimer::singleShot(30, &buttons, [&buttons, s] { buttons.release(s); });

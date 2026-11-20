@@ -91,7 +91,7 @@ private:
     bool m_24h = false;
     int m_t1 = 12 * 60;
     int m_t2 = 12 * 60;
-    qint64 m_swAccum = 0;      // centiseconds accumulated while stopped segments
+    qint64 m_swAccumMs = 0;    // simulated ms of the finished run segments
     qint64 m_swStartMs = 0;    // simulated ms at last start
     qint64 m_simMs = 0;        // simulated ms since construction (monotonic)
     qint64 m_lap = 0;

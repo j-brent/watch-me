@@ -19,6 +19,9 @@ private slots:
     void acceptanceAlarmWithinThreeSeconds();
     void stopwatchCountsWhileElsewhere();
     void resetOnBatteryInsert();
+    void resetBeforeQueuedInput();
+    void timeChangedOnWholeHours();
+    void stopwatchKeepsMilliseconds();
 };
 
 void TstModel::increments()
@@ -222,6 +225,60 @@ void TstModel::resetOnBatteryInsert()
     QCOMPARE(m.hour(), 3);
     QCOMPARE(m.day(), 2);
     QCOMPARE(sm.dataModel()->scxmlProperty("T1").toInt(), 12 * 60);
+}
+
+void TstModel::resetBeforeQueuedInput()
+{
+    // DESIGN-NOTES D-21: model.reset (sent on entry to alive) reaches the model
+    // before input queued behind battery.inserted, so it cannot undo sw.start.
+    WatchMachine sm;
+    WatchModel m(&sm);
+    sm.start();
+    settle();
+    sm.submitEvent("battery.inserted");
+    for (int i = 0; i < 4; ++i) { sm.submitEvent("a.down"); sm.submitEvent("a.up"); }
+    sm.submitEvent("b.down");                               // T-50: start
+    settle();
+    QVERIFY(sm.isActive("sw_on"));
+    QVERIFY(m.stopwatchRunning());
+    m.advance(1000);
+    QCOMPARE(m.stopwatchCentis(), 100);
+}
+
+void TstModel::timeChangedOnWholeHours()
+{
+    WatchModel m(nullptr);
+    m.setTime(10, 20, 30);
+    QSignalSpy spy(&m, &WatchModel::timeChanged);
+    m.advance(3600 * 1000);                                 // only the hour changes
+    QCOMPARE(m.hour(), 11);
+    QCOMPARE(spy.count(), 1);
+    m.advance(500);                                         // 11:20:30.5: nothing shown changes
+    QCOMPARE(spy.count(), 1);
+    m.advance(500);
+    QCOMPARE(spy.count(), 2);
+}
+
+void TstModel::stopwatchKeepsMilliseconds()
+{
+    // Ten 15 ms runs are 150 ms: stopping must not round each run down to 10 ms.
+    WatchMachine sm;
+    WatchModel m(&sm);
+    sm.start();
+    settle();
+    sm.submitEvent("battery.inserted");
+    for (int i = 0; i < 4; ++i) { sm.submitEvent("a.down"); sm.submitEvent("a.up"); }
+    settle();
+    QVERIFY(sm.isActive("sw_zero"));
+    for (int i = 0; i < 10; ++i) {
+        sm.submitEvent("b.down"); sm.submitEvent("b.up");   // start (T-50 / T-52)
+        settle();
+        m.advance(15);
+        sm.submitEvent("b.down"); sm.submitEvent("b.up");   // stop (T-51)
+        settle();
+    }
+    QVERIFY(!m.stopwatchRunning());
+    QCOMPARE(m.stopwatchCentis(), 15);
 }
 
 QTEST_GUILESS_MAIN(TstModel)

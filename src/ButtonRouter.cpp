@@ -10,7 +10,13 @@ static bool validButton(const QString &b)
 }
 
 ButtonRouter::ButtonRouter(QScxmlStateMachine *machine, QObject *parent)
-    : QObject(parent), m_machine(machine) {}
+    : QObject(parent), m_machine(machine)
+{
+    // The datamodel's initial values are only readable once the machine is initialized.
+    // https://doc.qt.io/qt-6/qscxmlstatemachine.html#initialized-prop
+    connect(m_machine, &QScxmlStateMachine::initializedChanged, this,
+            [this] { emit dataValueChanged(QString()); });
+}
 
 QVariantMap ButtonRouter::held() const
 {
@@ -56,8 +62,9 @@ void ButtonRouter::submit(const QString &event)
 
 void ButtonRouter::setDataValue(const QString &name, const QVariant &value)
 {
-    if (m_machine->dataModel())
-        m_machine->dataModel()->setScxmlProperty(name, value, QString());
+    // https://doc.qt.io/qt-6/qscxmldatamodel.html#setScxmlProperty
+    if (m_machine->dataModel() && m_machine->dataModel()->setScxmlProperty(name, value, QString()))
+        emit dataValueChanged(name);
 }
 
 QVariant ButtonRouter::dataValue(const QString &name) const
