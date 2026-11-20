@@ -122,9 +122,11 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
 - **D-8 Battery insertion.** On `alive` entry the C++ model resets alarms (T1 = T2 =
   12:00), the stopwatch and 12/24h mode to defaults, and seeds the clock from the
   host clock. [A] The paper is silent.
-- **D-9 Timeouts and simulation speed.** SCXML delays scale with `timeScale`
-  (tests: 0.001). The sim panel's clock-speed slider affects only the simulated
-  clock (T, alarms, chime), not the user-interaction timeouts.
+- **D-9 Timeouts and simulation speed.** The statechart's timeouts run on their own
+  clock (`TimeoutService`, D-20) at 1× real time in the app. The sim panel's
+  clock-speed slider affects only the watch's time T (alarms, chime), not the
+  2-second / 30-second / 2-minute interaction timeouts. *(Superseded detail: the
+  first version used SCXML `<send delay>` scaled by a `timeScale` datamodel value.)*
 - **D-10 "Beep-test from date" scenario (PLAN P3).** The plan expected
   "beep-test from date, release d → date". In Fig. 31 `d` in `date` goes to `time`
   unconditionally (T-21), so pressing b then d in date ends in time with the beeper
@@ -192,6 +194,30 @@ T-24, T-28, T-31, T-50..T-54, T-60..T-64, T-72.
   workflow (`workflow_call`), so published packages are exactly the tested
   ones. To make the code build on MSVC: `/utf-8` (non-ASCII literals) and
   `std::numbers::pi` instead of `M_PI`.
+- **D-20 Timeouts on an explicit clock.** The first version implemented
+  Harel's `timeout(entered X, n)` with SCXML delayed `<send>`s on Qt's real timers,
+  and tests shrank them with `timeScale` (2 min → 120 ms) and slept. Those tests
+  measured the runner's scheduling as much as the watch: on Windows CI a 2 ms
+  "2 sec in wait" expired between two button events and failed a correct build. A
+  failure could not be told apart from a real bug. Now:
+  - `watch.scxml` still decides every timer: entering X sends
+    `timer.start{id, secs, gen}`, leaving X sends `timer.cancel{id}`, and T-47
+    re-sends `timer.start` on a button press. Which timers exist, how long they
+    run, and when they restart or cancel are all in the statechart (and visible in
+    the view).
+  - `TimeoutService` (C++) only counts time and submits `timeout.<id>{gen}` when a
+    deadline passes. The app advances it from a real-time QTimer at 1×.
+  - Because the outgoing events are asynchronous (D-11), a timeout can already be
+    queued when X is left. Each timer carries a generation number (`tg_<id>`,
+    incremented on every start) and the timeout transition is guarded by
+    `_event.data.gen == tg_<id>`, so a timeout from an earlier visit is ignored.
+  - Tests advance the clock explicitly and check the exact boundary (at
+    119.999 s still in `date`, at 120 s in `time`). There are no sleeps or
+    wall-clock assertions, `tst_watch` runs in ~0.2 s instead of ~9 s, and
+    deliberately breaking a duration, the restart, the cancel or the generation
+    guard each makes a test fail.
+  - `tools/verify.py` runs the app with `--manual-time` and moves time with the
+    `advance:ms` / `clock:ms` script steps.
 
 ## 3. Open deviations from the paper (summary)
 

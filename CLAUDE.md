@@ -8,6 +8,9 @@
 - Every `<transition>` carries a `<!-- T-xx -->` comment **and** a
   `<log label="T-xx" expr="_event.name"/>` (the log drives the live event log).
   `python3 tests/conformance.py` must pass (spec ↔ SCXML ↔ tests).
+- Timeouts ("n sec in X") are `timer.start`/`timer.cancel` sends answered by
+  `TimeoutService` with a generation-guarded `timeout.<id>` (DESIGN-NOTES D-20).
+  Tests move time with `advance()`; never sleep or assert on wall-clock time.
 - Record every decision or deviation from the paper in `docs/DESIGN-NOTES.md`.
 - Don't hand-edit generated files in `build/`.
 - Cite Qt and SCXML doc URLs in comments for non-obvious APIs.

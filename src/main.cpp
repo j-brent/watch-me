@@ -15,6 +15,7 @@
 #include "TransitionTracer.h"
 #include "ButtonRouter.h"
 #include "WatchModel.h"
+#include "TimeoutService.h"
 #include "Beeper.h"
 #include "SpecTags.h"
 
@@ -45,6 +46,10 @@ int main(int argc, char *argv[])
                                QStringLiteral("WxH"));
     cli.addOption(winSize);
     cli.addOption(script);
+    QCommandLineOption manualTime(QStringLiteral("manual-time"),
+        QStringLiteral("Time does not follow the real clock; only --script steps 'clock:ms' and "
+                       "'advance:ms' move the watch time and the statechart's timeouts."));
+    cli.addOption(manualTime);
     QCommandLineOption exitAfter(QStringLiteral("exit"), QStringLiteral("Quit when the --script has run."));
     cli.addOption(exitAfter);
     cli.addOption(grab);
@@ -65,7 +70,11 @@ int main(int argc, char *argv[])
     specTags.load(QStringLiteral(":/docs/STATECHART-SPEC.md"));
     TransitionTracer tracer(&machine, &tree);
     WatchModel watch(&machine);
-    watch.setRunning(true);
+    TimeoutService timeouts(&machine);      // the statechart's "n sec in X" timers, 1x real time
+    if (!cli.isSet(manualTime)) {
+        watch.setRunning(true);
+        timeouts.setRunning(true);
+    }
     if (cli.isSet(startTime))
         watch.setResetTime(QDateTime::fromString(cli.value(startTime), Qt::ISODate));
     ButtonRouter buttons(&machine);
@@ -132,6 +141,10 @@ int main(int argc, char *argv[])
             watch.jumpBeforeAlarm(parts[1].toInt(), parts[2].toInt());
         } else if (parts.first() == u"settime" && parts.size() == 4) {      // settime:10:59:58
             watch.setTime(parts[1].toInt(), parts[2].toInt(), parts[3].toInt());
+        } else if (parts.first() == u"advance" && parts.size() == 2) {      // advance:120000 (timeout clock, ms)
+            timeouts.advance(parts[1].toLongLong());
+        } else if (parts.first() == u"clock" && parts.size() == 2) {        // clock:2000 (watch time T, ms)
+            watch.advance(parts[1].toLongLong());
         } else if (parts.first() == u"speed" && parts.size() == 2) {
             watch.setSpeed(parts[1].toDouble());
         } else if (parts.first() == u"export" && parts.size() == 2) {       // export:/path/log.txt

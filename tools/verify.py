@@ -6,7 +6,8 @@ exports the app's own event log, and checks it. Writes docs/VERIFICATION.md.
 Usage: tools/verify.py [build-dir]
 Each run starts with the battery inserted at 1987-06-01 10:08:30.
 Script steps: 'a' click, '+a'/'-a' hold/release, 'wait:ms', 'set:var:value'
-(datamodel), 'alarm:n:HH:MM', 'jump:n:secs', 'settime:H:M:S', or an event name.
+(datamodel), 'advance:ms' (the statechart's timeout clock), 'clock:ms' (the
+watch's time T), 'alarm:n:HH:MM', 'jump:n:secs', 'settime:H:M:S', or an event name.
 """
 import concurrent.futures as cf
 import os
@@ -19,7 +20,7 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BIN = ROOT / (sys.argv[1] if len(sys.argv) > 1 else "build") / "watch-me"
 
-UPD = "set:timeScale:0.01;+c;wait:200;-c"          # into update.sec (2 s scaled to 20 ms)
+UPD = "+c;advance:2000;-c"                          # hold c for 2 s: into update.sec
 SW = "a;a;a;a"                                       # time -> stopwatch
 EN1 = "a;d;a;a;a;a"                                  # enable alarm 1, back to time
 EN2 = "a;a;d;a;a;a"                                  # enable alarm 2, back to time
@@ -38,7 +39,7 @@ ROWS = [
     ("T-15", "d;a;a", ["T-20 d.down: time → date"], ["date"], ["a.down: date →"]),
     ("T-20", "d", ["T-20 d.down: time → date", "T-75 d.down: bt_00 → bt_01"], ["date"], []),
     ("T-21", "d;d", ["T-21 d.down: date → time"], ["time"], []),
-    ("T-22", "set:timeScale:0.01;d;wait:1600", ["T-22 timeout.date: date → time"], ["time"], []),
+    ("T-22", "d;advance:119999;advance:1", ["T-22 timeout.date: date → time"], ["time"], []),
     ("T-23", "+c", ["T-23 c.down: time → wait"], ["wait"], []),
     ("T-24", "+c;-c", ["T-24 c.up: wait → time"], ["time"], []),
     ("T-25", UPD, ["T-25 timeout.wait: wait → update_sec"], ["update_sec"], []),
@@ -48,7 +49,7 @@ ROWS = [
     ("T-27", UPD + ";c;c;c;c;d", ["◀ model.increment field=update_mon", "T-27 d.down: update → (no state change)"],
      ["update_mon"], []),
     ("T-28", UPD + ";c;c;c;b", ["T-28 b.down: update → time", "T-72 b.down: light_off → light_on"], ["time"], []),
-    ("T-29", UPD + ";wait:1600", ["T-29 timeout.update: update → time"], ["time"], []),
+    ("T-29", UPD + ";advance:120000", ["T-29 timeout.update: update → time"], ["time"], []),
     ("T-30", "a;c", ["T-30 c.down: alarm1 → update1_hr"], ["update1_hr"], []),
     ("T-31", "a;c;c;c", ["T-31 c.down: update1_hr → update1_10min", "T-31 c.down: update1_10min → update1_1min"],
      ["update1_1min"], []),
@@ -63,7 +64,7 @@ ROWS = [
     ("T-38", "a;a;c;c;d", ["◀ model.increment field=update2_10min", "T-38 d.down: update2 → (no state change)"],
      ["update2_10min"], []),
     ("T-39", "a;a;c;b", ["T-39 b.down: update2 → alarm2_H"], ["alarm2_off"], []),
-    ("T-40", "set:timeScale:0.01;a;c;wait:1600", ["T-40 timeout.out: out → regular"], ["time"], []),
+    ("T-40", "a;c;advance:120000", ["T-40 timeout.out: out → regular"], ["time"], []),
     ("T-41", "a;d;d", ["T-41 d.down: alarm1_disabled → alarm1_enabled", "T-41 d.down: alarm1_enabled → alarm1_disabled"],
      ["alarm1_disabled"], []),
     ("T-42", "a;a;d", ["T-42 d.down: alarm2_disabled → alarm2_enabled"], ["alarm2_enabled"], []),
@@ -72,7 +73,7 @@ ROWS = [
     ("T-44", "a;d;d", ["T-44 d.down: alarm1_off → alarm1_on", "T-44 d.down: alarm1_on → alarm1_off"], ["alarm1_off"], []),
     ("T-45", "a;a;d", ["T-45 d.down: alarm2_off → alarm2_on"], ["alarm2_on"], []),
     ("T-46", "a;a;a;d", ["T-46 d.down: chime_off → chime_on"], ["chime_on"], []),
-    ("T-47", "set:timeScale:0.02;d;wait:1500;a;wait:1200", ["T-47 a.down: alive → (no state change)"], ["date"],
+    ("T-47", "d;advance:100000;a;advance:119999", ["T-47 a.down: alive → (no state change)"], ["date"],
      ["T-22"]),
     ("T-50", SW + ";b", ["T-50 b.down: sw_zero → sw_reg, sw_on"], ["sw_reg", "sw_on"], []),
     ("T-51", SW + ";b;b", ["T-51 b.down: sw_on → sw_off"], ["sw_off"], []),
@@ -81,19 +82,19 @@ ROWS = [
     ("T-54", SW + ";b;d;d", ["T-54 d.down: sw_lap → sw_reg"], ["sw_reg"], []),
     ("T-55", SW + ";b;b;d", ["◀ sw.reset", "T-55 d.down: sw_reg → sw_zero"], ["sw_zero"], []),
     ("T-56", SW + ";b;b;b", ["◀ sw.start", "◀ sw.stop", "◀ beep.short"], ["sw_on"], []),
-    ("T-60", "alarm:1:10:10;" + EN1 + ";jump:1:2;wait:2600", ["T-60 T.hits.T1: displays → alarm1_beeps"],
+    ("T-60", "alarm:1:10:10;" + EN1 + ";jump:1:2;clock:3000", ["T-60 T.hits.T1: displays → alarm1_beeps"],
      ["alarm1_beeps"], []),
-    ("T-61", "alarm:1:09:00;alarm:2:10:10;" + EN1 + ";" + EN2 + ";jump:2:2;wait:2600",
+    ("T-61", "alarm:1:09:00;alarm:2:10:10;" + EN1 + ";" + EN2 + ";jump:2:2;clock:3000",
      ["T-61 T.hits.T2: displays → alarm2_beeps"], ["alarm2_beeps"], []),
-    ("T-62", "alarm:1:10:10;alarm:2:10:10;" + EN1 + ";" + EN2 + ";jump:1:2;wait:2600",
+    ("T-62", "alarm:1:10:10;alarm:2:10:10;" + EN1 + ";" + EN2 + ";jump:1:2;clock:3000",
      ["T-62 T.hits.T1: displays → both_beep"], ["both_beep"], ["T-60", "T-61"]),
-    ("T-63", "alarm:1:10:10;" + EN1 + ";a;a;c;c;jump:1:2;wait:2600;c",
+    ("T-63", "alarm:1:10:10;" + EN1 + ";a;a;c;c;jump:1:2;clock:3000;c",
      ["T-63 c.down: alarms_beep → displays_H"], ["update2_10min"], []),
-    ("T-64", "set:timeScale:0.01;alarm:1:10:10;" + EN1 + ";" + SW + ";b;d;jump:1:2;wait:2600",
+    ("T-64", "alarm:1:10:10;" + EN1 + ";" + SW + ";b;d;jump:1:2;clock:3000;advance:30000",
      ["T-64 timeout.alarms_beep: alarms_beep → displays_H"], ["sw_lap", "sw_on"], []),
-    ("T-70", "a;a;a;d;a;a;settime:10:59:58;wait:2600", ["T-70 T.hits.hour: chime_quiet → chime_beep"],
+    ("T-70", "a;a;a;d;a;a;settime:10:59:58;clock:3000", ["T-70 T.hits.hour: chime_quiet → chime_beep"],
      ["chime_beep"], []),
-    ("T-71", "a;a;a;d;a;a;settime:10:59:58;wait:5200", ["T-71 timeout.chime_beep: chime_beep → chime_quiet"],
+    ("T-71", "a;a;a;d;a;a;settime:10:59:58;clock:3000;advance:2000", ["T-71 timeout.chime_beep: chime_beep → chime_quiet"],
      ["chime_quiet"], []),
     ("T-72", "+b", ["T-72 b.down: light_off → light_on"], ["light_on"], []),
     ("T-73", "+b;-b", ["T-73 b.up: light_on → light_off"], ["light_off"], []),
@@ -128,7 +129,7 @@ def run(row):
         script = "battery.inserted;wait:150;" + ";".join(
             s + ";wait:120" for s in steps.split(";") if s) + f";wait:200;export:{out}"
         env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
-        subprocess.run([str(BIN), "--time", "1987-06-01T10:08:30", "--exit", "--grab-delay", "50",
+        subprocess.run([str(BIN), "--time", "1987-06-01T10:08:30", "--manual-time", "--exit", "--grab-delay", "50",
                         "--script", script], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        timeout=60)
         text = pathlib.Path(out).read_text(encoding="utf-8") if os.path.exists(out) else ""
@@ -164,9 +165,11 @@ def main():
           "headless with the battery inserted at 1987-06-01 10:08:30, driven through its normal",
           "input path (`ButtonRouter` → `WatchMachine`; clock events from `WatchModel`), and the",
           "app's own event log (`TransitionTracer`, the same log shown in the UI) is exported and",
-          "checked. Steps: `a` = click, `+a`/`-a` = hold/release, `wait:ms`, `set:x:v` = datamodel",
-          "value (`timeScale` 0.01 makes 2 min take 1.2 s), `alarm:n:HH:MM`, `jump:n:s` = T := Tn − s,",
-          "`settime:H:M:S`. `◀` lines are outgoing events (D-11).", "",
+          "checked. Steps: `a` = click, `+a`/`-a` = hold/release, `advance:ms` = move the",
+          "statechart's timeout clock (so \"2 min in date\" is `advance:120000`, exact and",
+          "independent of machine speed), `clock:ms` = move the watch's time T, `alarm:n:HH:MM`,",
+          "`jump:n:s` = T := Tn − s, `settime:H:M:S`. The app runs with `--manual-time`, so",
+          "only these steps move time. `◀` lines are outgoing events (D-11).", "",
           f"Result: **{len(results) - len(fails)} / {len(results)} ✓**"
           + (f", spec rows not walked: {', '.join(uncovered)}" if uncovered else ", every spec row walked") + ".", "",
           "Alongside this run, the spec was re-read against Fig. 31 (PDF pp. 21–22 at 400 dpi)",

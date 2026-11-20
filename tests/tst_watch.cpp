@@ -4,9 +4,14 @@
 //
 // Each check verifies the resulting configuration *and* that the transition
 // labelled with the row (<log label="T-xx"/>) actually fired.
+//
+// Time is explicit: the statechart's "n sec in X" timers run on TimeoutService's
+// clock, which only moves when a test calls advance(). Timing checks are exact
+// (119.999 s: still in date; 120 s: back in time) and independent of machine speed.
 #include <QtTest>
 #include <QScxmlEvent>
 #include "watch.h"
+#include "TimeoutService.h"
 
 namespace {
 
@@ -23,17 +28,16 @@ void scxmlErrorCatcher(QtMsgType t, const QMessageLogContext &ctx, const QString
     g_prevHandler(t, ctx, msg);
 }
 
-// timeScale 0.001: "2 min" = 120 ms, "30 sec" = 30 ms, "2 sec" = 2 ms.
-constexpr double kFast = 0.001;
+constexpr qint64 kSec = 1000;
+constexpr qint64 kMin = 60 * kSec;
 
 class Watch
 {
 public:
-    explicit Watch(double timeScale = kFast, bool anomalies = true)
+    explicit Watch(bool anomalies = true) : t(&m)
     {
         // https://doc.qt.io/qt-6/qscxmlstatemachine.html#initialValues-prop
-        m.setInitialValues({{QStringLiteral("timeScale"), timeScale},
-                            {QStringLiteral("harelAnomalies"), anomalies}});
+        m.setInitialValues({{QStringLiteral("harelAnomalies"), anomalies}});
         QObject::connect(&m, &QScxmlStateMachine::log, &m,
                          [this](const QString &label, const QString &) { fired << label; });
         // Outgoing qt:signal events (spec §3.3/§3.5): record name + field param.
@@ -74,10 +78,14 @@ public:
 
     void alive() { send(QStringLiteral("battery.inserted")); }
 
-    // Navigate from time to the given display with a presses.
-    void toAlarm1() { click('a'); }
+    // Move the timer clock forward by ms (fires every timeout reached) and let the
+    // machine process the resulting events.
+    void advance(qint64 ms) { t.advance(ms); settle(); }
+    // From time: hold c for 2 s (wait -> update.sec), release.
+    void enterUpdate() { down('c'); advance(2 * kSec); up('c'); }
 
     WatchMachine m;
+    TimeoutService t;                        // after m: it connects to m's events
     QStringList fired;
     QStringList out;
 };
@@ -195,23 +203,15 @@ void TstWatch::displayCycle()
 
     w.click('d');
     QVERIFY(w.in("time"));
-    {
-        // wait lasts 2 s; at timeScale 0.001 that is 2 ms, which a slow runner can
-        // exceed between two button events. Check wait on a real-time watch.
-        Watch rt(1.0);
-        rt.alive();
-        rt.down('c');                        // wait
-        QVERIFY(rt.in("wait"));
-        rt.click('a');
-        QVERIFY(rt.in("wait"));              // T-15
-        rt.up('c');
-        QVERIFY(rt.in("time"));
-    }
-
-    // update: hold c for 2 s (2 ms here)
-    w.down('c');
-    QTRY_VERIFY(w.in("update_sec"));
+    w.down('c');                             // wait
+    QVERIFY(w.in("wait"));
+    w.click('a');
+    QVERIFY(w.in("wait"));                   // T-15
     w.up('c');
+    QVERIFY(w.in("time"));
+
+    w.enterUpdate();
+    QVERIFY(w.in("update_sec"));
     w.click('a');
     QVERIFY(w.in("update_sec"));             // T-15
     w.click('b');
@@ -233,7 +233,7 @@ void TstWatch::displayCycle()
 // ------------------------------------------------------ §3.3 time / date / update
 void TstWatch::timeDateUpdate()
 {
-    Watch w(1.0);                            // real time: no timeout may interfere
+    Watch w;
     w.alive();
 
     w.click('d');                            // T-20 (b up)
@@ -256,8 +256,12 @@ void TstWatch::timeDateUpdate()
     FIRED(w, "T-23");
     QVERIFY(w.in("wait"));
     QVERIFY(!w.in("regular"));               // wait is outside regular (no beep-test)
-    w.up('c');                               // T-24
+    w.advance(2 * kSec - 1);                 // released just before 2 s ...
+    QVERIFY(w.in("wait"));
+    w.up('c');                               // T-24 ... returns to time
     FIRED(w, "T-24");
+    QVERIFY(w.in("time"));
+    w.advance(10 * kSec);                    // and the cancelled wait timer stays dead
     QVERIFY(w.in("time"));
 }
 
@@ -266,7 +270,10 @@ void TstWatch::updateTimeout()
     Watch w;
     w.alive();
     w.down('c');
-    QTRY_VERIFY(w.in("update"));             // T-25 after 2 s in wait
+    w.advance(2 * kSec - 1);
+    QVERIFY(w.in("wait"));
+    NOT_FIRED(w, "T-25");
+    w.advance(1);                            // T-25 exactly at 2 s in wait
     FIRED(w, "T-25");
     QVERIFY(w.in("update_sec"));
     w.up('c');
@@ -296,9 +303,7 @@ void TstWatch::updateTimeout()
     QVERIFY(!w.in("update"));
 
     // T-28: b leaves update from any field
-    w.down('c');
-    QTRY_VERIFY(w.in("update_sec"));
-    w.up('c');
+    w.enterUpdate();
     w.clicks("ccc");
     QVERIFY(w.in("update_hr"));
     w.reset();
@@ -306,15 +311,16 @@ void TstWatch::updateTimeout()
     FIRED(w, "T-28");
     QVERIFY(w.in("time"));
 
-    // T-29: 2 min in update with no button -> time
-    w.down('c');
-    QTRY_VERIFY(w.in("update_sec"));
-    w.up('c');
+    // T-29: 2 min in update with no button -> time (the c press restarted it)
+    w.enterUpdate();
     w.click('c');
     QVERIFY(w.in("update_1min"));
     w.reset();
-    QTRY_VERIFY_WITH_TIMEOUT(w.in("time"), 2000);
+    w.advance(2 * kMin - 1);
+    QVERIFY(w.in("update_1min"));
+    w.advance(1);
     FIRED(w, "T-29");
+    QVERIFY(w.in("time"));
 }
 
 void TstWatch::dateTimeout()
@@ -323,57 +329,63 @@ void TstWatch::dateTimeout()
     w.alive();
     w.click('d');
     QVERIFY(w.in("date"));
-    QElapsedTimer t;
-    t.start();
-    QTRY_VERIFY_WITH_TIMEOUT(w.in("time"), 2000);  // T-22
-    QVERIFY(t.elapsed() >= 100);                    // ~120 ms = 2 min scaled
+    QCOMPARE(w.t.remaining("date"), 2 * kMin);      // armed on entry
+    w.advance(2 * kMin - 1);
+    QVERIFY(w.in("date"));
+    NOT_FIRED(w, "T-22");
+    w.advance(1);                                    // T-22 exactly at 2 min
     FIRED(w, "T-22");
+    QVERIFY(w.in("time"));
+    QCOMPARE(w.t.remaining("date"), -1);
 }
 
 void TstWatch::idleRestart()
 {
     // T-47: any button restarts the 2-min timer (prose p. 247: "on condition that no
-    // button has been depressed in the interim"). timeScale 0.004: 2 min = 480 ms.
+    // button has been depressed in the interim").
     for (const char *where : {"date", "out", "update"}) {
-        Watch w(0.004);
+        Watch w;
         w.alive();
         if (qstrcmp(where, "date") == 0) w.click('d');
         if (qstrcmp(where, "out") == 0) w.click('a');
-        if (qstrcmp(where, "update") == 0) { w.down('c'); QTRY_VERIFY(w.in("update")); w.up('c'); }
+        if (qstrcmp(where, "update") == 0) w.enterUpdate();
         QVERIFY2(w.in(where), where);
-        QElapsedTimer t;
-        t.start();
-        QTest::qWait(300);
+        w.advance(100 * kSec);
         w.reset();
         w.click(qstrcmp(where, "out") == 0 ? 'c' : 'a');   // a button that stays in `where`
         FIRED(w, "T-47");
         QVERIFY2(w.in(where), where);
-        QTest::qWait(300);                    // 600 ms after entry, 300 after the press
-        QVERIFY2(w.in(where), where);         // restarted: not yet returned
-        QTRY_VERIFY_WITH_TIMEOUT(w.in("time"), 2000);
-        QVERIFY(t.elapsed() >= 300 + 450);
+        w.advance(2 * kMin - 1);              // 220 s after entry, just under 2 min after the press
+        QVERIFY2(w.in(where), where);
+        w.advance(1);
+        QVERIFY2(w.in("time"), where);
     }
 
-    // T-47 does not re-arm a timer whose state the same button leaves:
-    // date -d-> time, then back into date within 2 min must not inherit a stale timer.
-    Watch w(0.004);
+    // Leaving date cancels its timer, and a timeout from an earlier visit is
+    // ignored after re-entry (timer generations).
+    Watch w;
     w.alive();
-    w.click('d');
-    QTest::qWait(300);
-    w.click('d');                             // leaves date (T-21) — T-47 must not re-send to_date
+    w.click('d');                             // date, first generation
+    w.advance(100 * kSec);
+    w.click('d');                             // leaves date (T-21); T-47 must not re-arm it
     QVERIFY(w.in("time"));
-    QTest::qWait(200);
-    w.click('d');                             // back into date, fresh 480 ms timer
-    QElapsedTimer t;
-    t.start();
-    QTRY_VERIFY_WITH_TIMEOUT(w.in("time"), 2000);
-    QVERIFY2(t.elapsed() >= 400, "a stale timer returned to time early");
+    QCOMPARE(w.t.remaining("date"), -1);
+    w.advance(10 * kSec);
+    w.click('d');                             // back into date: fresh 2-min timer
+    w.advance(2 * kMin - 1);
+    QVERIFY(w.in("date"));
+    // a late timeout of an old generation (e.g. queued before the exit) is ignored
+    w.m.submitEvent(QStringLiteral("timeout.date"), QVariantMap{{QStringLiteral("gen"), 1}});
+    w.settle();
+    QVERIFY(w.in("date"));
+    w.advance(1);
+    QVERIFY(w.in("time"));
 }
 
 // -------------------------------------------------------- §3.4 alarm / chime displays
 void TstWatch::alarmDisplays()
 {
-    Watch w(1.0);
+    Watch w;
     w.alive();
     w.click('a');
     QVERIFY(w.in("alarm1_off") && w.in("alarm1_disabled"));
@@ -491,23 +503,26 @@ void TstWatch::outTimeout()
     w.click('c');                            // update1 is inside out as well
     QVERIFY(w.in("update1_hr"));
     w.reset();
-    QTRY_VERIFY_WITH_TIMEOUT(w.in("time"), 2000);   // T-40
+    w.advance(2 * kMin - 1);
+    QVERIFY(w.in("update1_hr"));
+    w.advance(1);                            // T-40
     FIRED(w, "T-40");
+    QVERIFY(w.in("time"));
     QVERIFY(w.in("bt_00"));                  // entered regular by default
 
     // stopwatch is not in out: no automatic return
-    Watch s(0.002);
+    Watch s;
     s.alive();
     s.clicks("aaaa");
     QVERIFY(s.in("stopwatch"));
-    QTest::qWait(400);                       // > 2 min scaled
+    s.advance(60 * kMin);                    // no automatic return from the stopwatch
     QVERIFY(s.in("stopwatch"));
 }
 
 // ----------------------------------------------------------------- §3.5 stopwatch
 void TstWatch::stopwatch()
 {
-    Watch w(1.0);
+    Watch w;
     w.alive();
     w.clicks("aaaa");
     QVERIFY(w.in("sw_zero"));
@@ -561,7 +576,7 @@ void TstWatch::alarmsBeep()
 {
     // T-60: alarm1 enabled alone
     {
-        Watch w(1.0);
+        Watch w;
         w.alive();
         w.setAlarms(420, 480);
         w.click('a');
@@ -581,7 +596,7 @@ void TstWatch::alarmsBeep()
     }
     // T-61: alarm2 enabled, alarm1 enabled with a different time
     {
-        Watch w(1.0);
+        Watch w;
         w.alive();
         w.setAlarms(420, 480);
         w.click('a');
@@ -598,9 +613,9 @@ void TstWatch::alarmsBeep()
         w.send("T.hits.T1");                 // T-60 with alarm2 enabled but T1 != T2
         QVERIFY(w.in("alarm1_beeps"));
     }
-    // T-62 and T-64 (timeScale 0.01: alarms-beep lasts 300 ms, long enough to observe)
+    // T-62 and T-64
     {
-        Watch w(0.01);
+        Watch w;
         w.alive();
         w.setAlarms(420, 420);
         w.click('a');
@@ -614,8 +629,11 @@ void TstWatch::alarmsBeep()
         FIRED(w, "T-62");
         NOT_FIRED(w, "T-60");
         QVERIFY(w.in("both_beep"));
-        QTRY_VERIFY_WITH_TIMEOUT(w.in("chime"), 2000);   // T-64 after 30 s
+        w.advance(30 * kSec - 1);
+        QVERIFY(w.in("both_beep"));
+        w.advance(1);                        // T-64 after 30 s
         FIRED(w, "T-64");
+        QVERIFY(w.in("chime"));
     }
 }
 
@@ -630,21 +648,14 @@ void TstWatch::chimeLightBeepTest()
     w.click('d');                            // enable chime
     w.clicks("aa");
     QVERIFY(w.in("time") && w.in("chime_quiet"));
-    w.send("T.hits.hour");                   // T-70, then T-71 after 2 s (2 ms here)
+    w.send("T.hits.hour");                   // T-70
     FIRED(w, "T-70");
-    QTRY_VERIFY_WITH_TIMEOUT(w.in("chime_quiet"), 1000);  // T-71
+    QVERIFY(w.in("chime_beep"));
+    w.advance(2 * kSec - 1);
+    QVERIFY(w.in("chime_beep"));
+    w.advance(1);                            // T-71 after 2 s in beep
     FIRED(w, "T-71");
-    {
-        // chime.beep itself lasts only 2 ms at timeScale 0.001; observe it on a
-        // real-time watch so the check cannot race the 2 s timer.
-        Watch rt(1.0);
-        rt.alive();
-        rt.clicks("aaa");
-        rt.click('d');
-        rt.clicks("aa");
-        rt.send("T.hits.hour");              // T-70
-        QVERIFY(rt.in("chime_beep"));
-    }
+    QVERIFY(w.in("chime_quiet"));
 
     w.down('b');                             // T-72
     FIRED(w, "T-72");
@@ -666,7 +677,7 @@ void TstWatch::chimeLightBeepTest()
 void TstWatch::harelAnomalyFlagOff()
 {
     // T-82 is guarded by harelAnomalies: with the flag off, a does not silence.
-    Watch w(1.0, false);
+    Watch w(false);
     w.alive();
     w.down('d');                             // time -> date, beep-test 01
     w.down('b');                             // 01 -> beep (T-77), still in date
@@ -682,11 +693,10 @@ void TstWatch::harelAnomalyFlagOff()
 void TstWatch::scenarioLightAndExitUpdate()
 {
     // Harel p. 247: b in update turns the light on AND leaves update (orthogonality).
-    Watch w(1.0);
+    Watch w;
     w.alive();
-    w.down('c');
-    QTRY_VERIFY_WITH_TIMEOUT(w.in("update_sec"), 3000);
-    w.up('c');
+    w.enterUpdate();
+    QVERIFY(w.in("update_sec"));
     w.clicks("ccc");
     QVERIFY(w.in("update_hr"));
     w.reset();
@@ -702,7 +712,7 @@ void TstWatch::scenarioLightAndExitUpdate()
 
 void TstWatch::scenarioAlarmInStopwatchLap()
 {
-    Watch w(1.0);
+    Watch w;
     w.alive();
     w.click('a');
     w.click('d');                            // alarm1 enabled
@@ -718,7 +728,7 @@ void TstWatch::scenarioAlarmInStopwatchLap()
 
 void TstWatch::scenarioBothBeepOnly()
 {
-    Watch w(1.0);
+    Watch w;
     w.alive();
     w.setAlarms(600, 600);
     w.click('a');
@@ -737,7 +747,7 @@ void TstWatch::scenarioBothBeepOnly()
 
 void TstWatch::scenarioAlarmTimeoutReturnsToPrevious()
 {
-    Watch w(0.01);                           // 30 s in alarms-beep = 300 ms
+    Watch w;
     w.alive();
     w.click('a');
     w.click('d');
@@ -747,13 +757,14 @@ void TstWatch::scenarioAlarmTimeoutReturnsToPrevious()
     QVERIFY(w.in("update2_10min"));
     w.send("T.hits.T1");
     QVERIFY(w.in("alarm1_beeps"));
-    QTRY_VERIFY_WITH_TIMEOUT(!w.in("alarms_beep"), 2000);
+    w.advance(30 * kSec);
+    QVERIFY(!w.in("alarms_beep"));
     QVERIFY(w.in("update2_10min"));          // 30 s, no button -> H*
 }
 
 void TstWatch::scenarioBatteryDiesInAlarm2Update()
 {
-    Watch w(1.0);
+    Watch w;
     w.alive();
     w.click('a');
     w.click('d');                            // alarm1 on
@@ -801,7 +812,7 @@ void TstWatch::scenarioBeepTestFromDate()
     // Fig. 31: in date, b then d. d leaves date for time (T-21 has no condition),
     // while beep-test goes 10 -> beep. Releasing d: beep -> 10 (T-80); releasing b:
     // 10 -> 00 (T-78). The display stays in time (DESIGN-NOTES D-10).
-    Watch w(1.0);
+    Watch w;
     w.alive();
     w.click('d');
     QVERIFY(w.in("date"));
@@ -851,7 +862,7 @@ void TstWatch::scenarioBeepTestFromDate()
     QVERIFY(w.in("bt_beep_on"));
 
     // not applicable in wait, out, stopwatch
-    Watch v(1.0);
+    Watch v;
     v.alive();
     v.down('c');
     v.down('b');
@@ -868,7 +879,7 @@ void TstWatch::scenarioBeepTestFromDate()
 
 void TstWatch::scenarioStopwatchKeepsRunning()
 {
-    Watch w(1.0);
+    Watch w;
     w.alive();
     w.clicks("aaaa");
     w.out.clear();
@@ -885,11 +896,10 @@ void TstWatch::scenarioPaperMonDThenB()
 {
     // Harel p. 250: in mon, press d then b without releasing: time, month advanced
     // by one, beeper beeping, light on.
-    Watch w(1.0);
+    Watch w;
     w.alive();
-    w.down('c');
-    QTRY_VERIFY_WITH_TIMEOUT(w.in("update_sec"), 3000);
-    w.up('c');
+    w.enterUpdate();
+    QVERIFY(w.in("update_sec"));
     w.clicks("cccc");
     QVERIFY(w.in("update_mon"));
     w.out.clear();

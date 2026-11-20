@@ -165,7 +165,6 @@ void TstModel::acceptanceAlarmWithinThreeSeconds()
 void TstModel::stopwatchCountsWhileElsewhere()
 {
     WatchMachine sm;
-    sm.setInitialValues({{"timeScale", 1.0}});
     WatchModel m(&sm);
     sm.start();
     settle();

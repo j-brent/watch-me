@@ -34,7 +34,7 @@ is logged in `docs/DESIGN-NOTES.md` §1 as *row → old → new → figure*.
 | `battery.dies` | "weak battery dies" | [P] Figs. 26, 28, 31 |
 | `battery.removed` | "battery removed" | [P] |
 | `battery.inserted` | "battery inserted" | [P] |
-| `timeout.*` | `timeout(entered X, n)` / "n sec in X" (§4.2) — SCXML `<send delay>` + `<cancel>` | [P] |
+| `timeout.*` | `timeout(entered X, n)` / "n sec in X" (§4.2) — X's entry sends `timer.start{id, secs, gen}`, its exit `timer.cancel{id}`; the clock (C++ `TimeoutService`) answers `timeout.<id>{gen}`, taken only if `gen` is current (DESIGN-NOTES D-20) | [P] |
 
 `any button pressed` = any of `a.down | b.down | c.down | d.down`
 (SCXML: `event="a.down b.down c.down d.down"`).

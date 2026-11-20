@@ -23,6 +23,7 @@ qt_standard_project_setup()
 # ---------------------------------------------------------------------------
 add_library(watchcore STATIC
     src/WatchModel.h src/WatchModel.cpp
+    src/TimeoutService.h src/TimeoutService.cpp
     src/ButtonRouter.h src/ButtonRouter.cpp
     src/ScxmlTreeModel.h src/ScxmlTreeModel.cpp
     src/TransitionTracer.h src/TransitionTracer.cpp

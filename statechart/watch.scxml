@@ -9,7 +9,11 @@
   submits buttons, battery events and "T hits" events.
 
   SCXML reference: https://www.w3.org/TR/scxml/
-  Outgoing events (model.*, sw.*, beep.short) are plain <send>s to the machine's own
+  Timers: "n sec in X" is timer.start{id,secs,gen} on entry and timer.cancel{id}
+  on exit; C++ (TimeoutService) counts the time and submits timeout.X{gen}. The
+  statechart decides every timer; C++ only keeps the clock (DESIGN-NOTES D-20).
+
+  Outgoing events (model.*, sw.*, beep.short, timer.*) are plain <send>s to the machine's own
   external queue, observed in C++ with QScxmlStateMachine::connectToEvent
   (https://doc.qt.io/qt-6/qscxmlstatemachine.html#connectToEvent). Qt 6.4 rejects
   type="qt:signal" (DESIGN-NOTES D-11).
@@ -18,8 +22,15 @@
        name="WatchMachine" datamodel="ecmascript" initial="watch">
 
   <datamodel>
-    <!-- 1 = real time. Tests use 0.001 so that "2 min" takes 120 ms. -->
-    <data id="timeScale" expr="1"/>
+    <!-- Generation of each "n sec in X" timer (spec §1, DESIGN-NOTES D-20). A
+         timeout.X is only taken if it carries the current generation, so a timeout
+         from an earlier visit to X is ignored. -->
+    <data id="tg_date" expr="0"/>
+    <data id="tg_update" expr="0"/>
+    <data id="tg_wait" expr="0"/>
+    <data id="tg_out" expr="0"/>
+    <data id="tg_alarms_beep" expr="0"/>
+    <data id="tg_chime_beep" expr="0"/>
     <!-- Fig. 32 (a silences the beep-test beep). Not part of Fig. 31. -->
     <data id="harelAnomalies" expr="true"/>
     <!-- Alarm times in minutes after midnight; written by WatchModel. -->
@@ -33,7 +44,6 @@
   </datamodel>
 
   <script>
-    function ms(s) { return Math.max(0, Math.round(s * 1000 * timeScale)) + 'ms'; }
     function firstActive(ids) {
       for (var i = 0; i &lt; ids.length; ++i) if (In(ids[i])) return ids[i];
       return '';
@@ -63,22 +73,22 @@
             <assign location="hv_stopwatch" expr="false"/>
       </transition>
 
-      <!-- 2-minute returns: any button restarts the timer of the active display.
-           In() inside the content sees the configuration after the exit set, so a
-           timer whose state was just left is not re-armed. -->
+      <!-- 2-minute returns: any button restarts the timer of the active display
+           (a new generation). In() inside the content sees the configuration after
+           the exit set, so a timer whose state was just left is not re-armed. -->
       <transition event="a.down b.down c.down d.down" cond="In('date') || In('update') || In('out')"> <!-- T-47 -->
         <log label="T-47" expr="_event.name"/>
         <if cond="In('date')">
-          <cancel sendid="to_date"/>
-          <send id="to_date" event="timeout.date" delayexpr="ms(120)"/>
+          <assign location="tg_date" expr="tg_date + 1"/>
+          <send event="timer.start"><param name="id" expr="'date'"/><param name="secs" expr="120"/><param name="gen" expr="tg_date"/></send>
         </if>
         <if cond="In('update')">
-          <cancel sendid="to_update"/>
-          <send id="to_update" event="timeout.update" delayexpr="ms(120)"/>
+          <assign location="tg_update" expr="tg_update + 1"/>
+          <send event="timer.start"><param name="id" expr="'update'"/><param name="secs" expr="120"/><param name="gen" expr="tg_update"/></send>
         </if>
         <if cond="In('out')">
-          <cancel sendid="to_out"/>
-          <send id="to_out" event="timeout.out" delayexpr="ms(120)"/>
+          <assign location="tg_out" expr="tg_out + 1"/>
+          <send event="timer.start"><param name="id" expr="'out'"/><param name="secs" expr="120"/><param name="gen" expr="tg_out"/></send>
         </if>
       </transition>
 
@@ -116,15 +126,21 @@
 
               <state id="date">
                 <!-- T-15: no a-transition leaves date, update, update1, update2 or wait -->
-                <onentry><send id="to_date" event="timeout.date" delayexpr="ms(120)"/></onentry>
-                <onexit><cancel sendid="to_date"/></onexit>
+                <onentry>
+                  <assign location="tg_date" expr="tg_date + 1"/>
+                  <send event="timer.start"><param name="id" expr="'date'"/><param name="secs" expr="120"/><param name="gen" expr="tg_date"/></send>
+                </onentry>
+                <onexit><send event="timer.cancel"><param name="id" expr="'date'"/></send></onexit>
                 <transition event="d.down" target="time"><log label="T-21" expr="_event.name"/></transition> <!-- T-21 -->
-                <transition event="timeout.date" target="time"><log label="T-22" expr="_event.name"/></transition> <!-- T-22 -->
+                <transition event="timeout.date" cond="_event.data.gen == tg_date" target="time"><log label="T-22" expr="_event.name"/></transition> <!-- T-22 -->
               </state>
 
               <state id="update" initial="update_sec">
-                <onentry><send id="to_update" event="timeout.update" delayexpr="ms(120)"/></onentry>
-                <onexit><cancel sendid="to_update"/></onexit>
+                <onentry>
+                  <assign location="tg_update" expr="tg_update + 1"/>
+                  <send event="timer.start"><param name="id" expr="'update'"/><param name="secs" expr="120"/><param name="gen" expr="tg_update"/></send>
+                </onentry>
+                <onexit><send event="timer.cancel"><param name="id" expr="'update'"/></send></onexit>
                 <transition event="d.down"> <!-- T-27 increment the field being edited -->
                   <log label="T-27" expr="_event.name"/>
                   <send event="model.increment">
@@ -132,7 +148,7 @@
                   </send>
                 </transition>
                 <transition event="b.down" target="time"><log label="T-28" expr="_event.name"/></transition> <!-- T-28 -->
-                <transition event="timeout.update" target="time"><log label="T-29" expr="_event.name"/></transition> <!-- T-29 -->
+                <transition event="timeout.update" cond="_event.data.gen == tg_update" target="time"><log label="T-29" expr="_event.name"/></transition> <!-- T-29 -->
 
                 <state id="update_sec">
                   <transition event="c.down" target="update_1min"><log label="T-26" expr="_event.name"/></transition> <!-- T-26 -->
@@ -197,17 +213,23 @@
 
           <!-- ............................................................ wait -->
           <state id="wait">
-            <onentry><send id="to_wait" event="timeout.wait" delayexpr="ms(2)"/></onentry>
-            <onexit><cancel sendid="to_wait"/></onexit>
+            <onentry>
+              <assign location="tg_wait" expr="tg_wait + 1"/>
+              <send event="timer.start"><param name="id" expr="'wait'"/><param name="secs" expr="2"/><param name="gen" expr="tg_wait"/></send>
+            </onentry>
+            <onexit><send event="timer.cancel"><param name="id" expr="'wait'"/></send></onexit>
             <transition event="c.up" target="time"><log label="T-24" expr="_event.name"/></transition> <!-- T-24 -->
-            <transition event="timeout.wait" target="update_sec"><log label="T-25" expr="_event.name"/></transition> <!-- T-25 -->
+            <transition event="timeout.wait" cond="_event.data.gen == tg_wait" target="update_sec"><log label="T-25" expr="_event.name"/></transition> <!-- T-25 -->
           </state>
 
           <!-- ............................................................. out -->
           <state id="out" initial="alarm1">
-            <onentry><send id="to_out" event="timeout.out" delayexpr="ms(120)"/></onentry>
-            <onexit><cancel sendid="to_out"/></onexit>
-            <transition event="timeout.out" target="regular"><log label="T-40" expr="_event.name"/></transition> <!-- T-40 -->
+            <onentry>
+              <assign location="tg_out" expr="tg_out + 1"/>
+              <send event="timer.start"><param name="id" expr="'out'"/><param name="secs" expr="120"/><param name="gen" expr="tg_out"/></send>
+            </onentry>
+            <onexit><send event="timer.cancel"><param name="id" expr="'out'"/></send></onexit>
+            <transition event="timeout.out" cond="_event.data.gen == tg_out" target="regular"><log label="T-40" expr="_event.name"/></transition> <!-- T-40 -->
 
             <state id="alarm1" initial="alarm1_off">
               <history id="alarm1_H" type="shallow"><transition target="alarm1_off"/></history>
@@ -340,10 +362,13 @@
 
         <!-- ...................................................... alarms-beep -->
         <state id="alarms_beep" initial="alarm1_beeps">
-          <onentry><send id="to_alarms_beep" event="timeout.alarms_beep" delayexpr="ms(30)"/></onentry>
-          <onexit><cancel sendid="to_alarms_beep"/></onexit>
+          <onentry>
+            <assign location="tg_alarms_beep" expr="tg_alarms_beep + 1"/>
+            <send event="timer.start"><param name="id" expr="'alarms_beep'"/><param name="secs" expr="30"/><param name="gen" expr="tg_alarms_beep"/></send>
+          </onentry>
+          <onexit><send event="timer.cancel"><param name="id" expr="'alarms_beep'"/></send></onexit>
           <transition event="a.down b.down c.down d.down" target="displays_H"><log label="T-63" expr="_event.name"/></transition> <!-- T-63 -->
-          <transition event="timeout.alarms_beep" target="displays_H"><log label="T-64" expr="_event.name"/></transition> <!-- T-64 -->
+          <transition event="timeout.alarms_beep" cond="_event.data.gen == tg_alarms_beep" target="displays_H"><log label="T-64" expr="_event.name"/></transition> <!-- T-64 -->
           <state id="alarm1_beeps"/>
           <state id="alarm2_beeps"/>
           <state id="both_beep"/>
@@ -381,9 +406,12 @@
             <transition event="T.hits.hour" target="chime_beep"><log label="T-70" expr="_event.name"/></transition> <!-- T-70 -->
           </state>
           <state id="chime_beep">
-            <onentry><send id="to_chime_beep" event="timeout.chime_beep" delayexpr="ms(2)"/></onentry>
-            <onexit><cancel sendid="to_chime_beep"/></onexit>
-            <transition event="timeout.chime_beep" target="chime_quiet"><log label="T-71" expr="_event.name"/></transition> <!-- T-71 -->
+            <onentry>
+              <assign location="tg_chime_beep" expr="tg_chime_beep + 1"/>
+              <send event="timer.start"><param name="id" expr="'chime_beep'"/><param name="secs" expr="2"/><param name="gen" expr="tg_chime_beep"/></send>
+            </onentry>
+            <onexit><send event="timer.cancel"><param name="id" expr="'chime_beep'"/></send></onexit>
+            <transition event="timeout.chime_beep" cond="_event.data.gen == tg_chime_beep" target="chime_quiet"><log label="T-71" expr="_event.name"/></transition> <!-- T-71 -->
           </state>
         </state>
       </state>
