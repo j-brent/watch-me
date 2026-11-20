@@ -132,6 +132,7 @@ Headless: `QT_QPA_PLATFORM=offscreen`. `tools/screenshots.sh` regenerates
 | `shared/statechart/watch.scxml` | The machine, shared by every host. Every transition (except `<history>` defaults and the `host.*` boundary, D-24) carries `<!-- T-xx -->` and `<log label="T-xx"/>` |
 | `shared/statechart/layout.json` | View hints only (button placement, rows/columns of the statechart view) |
 | `shared/qml/` | The whole UI, shared by every host: `Main` (declares the host objects as required properties), `WatchFace`, `Lcd`, `SevenSegment`, `StatechartView`, `StateBox`, `TransitionOverlay`, `Legend`, `SimPanel`, `EventLog` |
+| `docs/HOST-COMPARISON.md` | The five hosts (C++, Python, Rust, QML/JS, QML/TS) compared: size, tooling, start-up, memory, what each binding made hard |
 | `docs/HOST-CONTRACT.md` | What a host must provide: the SCXML events, the objects `Main.qml` needs, the event log format, the command line |
 | `CMakeLists.txt`, `cpp/src/` | The C++ host (the reference): `WatchModel` (values), `TimeoutService` (the clock behind the statechart's timeouts), `ButtonRouter` (input), `ScxmlTreeModel` + `TransitionTracer` + `SpecTags` (view data), `Beeper` (optional sound) |
 | `cpp/tests/` | `tst_watch` (one check per T-xx + scenarios; timeouts checked exactly on an explicit clock, no sleeps), `tst_model`, `tst_tree`, `tst_input`, `tst_lcd`, `conformance.py` (spec ↔ SCXML ↔ tests) |
